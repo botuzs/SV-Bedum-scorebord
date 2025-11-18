@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Scorebord</title>
+    <meta http-equiv="refresh" content="3600">
+    
+    <link rel="stylesheet" href="/theme.css?v={{ range(1, 99999) | random }}">
+    
+    <style>
+        /* Basisstijl voor logos in de balk */
+        .sponsor-logo {
+             max-width: 45%; 
+             max-height: 90%; 
+             width: auto; 
+             height: auto;
+        }
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+
+    <div class="bar-container">
+        <div class="top-bar">
+            <div class="timer" id="timerVeld">00:00</div>
+        </div>
+    </div>
+
+    <div class="main-display" id="mainDisplay">
+        <div id="wachten" class="placeholder">
+            Scorebord SV Bedum<br>
+            Wachten op actieve wedstrijd...
+        </div>
+        
+        <div id="live" class="container"> 
+            <div class="score-row">
+                <div class="team-logo-container">
+                    <img id="thuisLogo" class="team-logo" src="https://logoapi.voetbal.nl/logo.php?clubcode=PJSY23I">
+                </div>
+                <div class="score" id="scoreVeld">0 - 0</div>
+                <div class="team-logo-container">
+                    <img id="uitLogo" class="team-logo" src="">
+                </div>
+            </div>
+
+            <div class="timer-row"></div>
+
+            <div class="teamnaam-row" style="display: none;">
+                <div class="team-naam" id="thuisNaam">SV BEDUM</div>
+                <div class="team-naam-spacer"></div>
+                <div class="team-naam" id="uitNaam">UIT</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bar-container">
+        <div class="bottom-bar" id="sponsorBar">
+            {% if hoofdsponsor_pad %}
+                <img class="sponsor-logo" id="hoofdsponsor-img" src="{{ url_for('static', filename=hoofdsponsor_pad) }}">
+            {% endif %}
+            
+            {% for sponsor_path in roterende_sponsors_lijst %}
+                <img class="sponsor-logo balsponsor-img" src="{{ url_for('static', filename=sponsor_path) }}">
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        // --- Elementen ---
+        const wachtenDiv = document.getElementById('wachten');
+        const liveDiv = document.getElementById('live');
+        const timerVeld = document.getElementById('timerVeld');
+        const thuisLogo = document.getElementById('thuisLogo');
+        const uitLogo = document.getElementById('uitLogo');
+        const scoreVeld = document.getElementById('scoreVeld');
+        const thuisNaamVeld = document.getElementById('thuisNaam');
+        const uitNaamVeld = document.getElementById('uitNaam');
+        
+        let actieveWedstrijdId = null;
+        let laatsteStatus = ""; // <--- NIEUW: Onthoud wat we aan het doen zijn
+
+        // --- TIMER Logica ---
+        let timerInterval = null;
+        let timerSeconden = 0;
+        
+        function formatTijd(sec) { 
+            const m = Math.floor(sec / 60); 
+            const s = sec % 60; 
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; 
+        }
+
+        function startTimer(start) { 
+            clearInterval(timerInterval); 
+            timerSeconden = start; 
+            timerVeld.innerText = formatTijd(timerSeconden); 
+            timerInterval = setInterval(() => { 
+                timerSeconden++; 
+                timerVeld.innerText = formatTijd(timerSeconden); 
+            }, 1000); 
+        }
+
+        function stopTimer() { 
+            clearInterval(timerInterval); 
+        }
+        
+        // --- SOCKET Handlers ---
+        function updateDisplay(data) {
+            if (!actieveWedstrijdId || actieveWedstrijdId === data.id) {
+                wachtenDiv.style.display = 'none'; 
+                liveDiv.style.display = 'flex'; 
+                actieveWedstrijdId = data.id;
+            }
+            if (data.id === actieveWedstrijdId) {
+                thuisNaamVeld.innerText = data.thuis.toUpperCase();
+                uitNaamVeld.innerText = data.uit.toUpperCase();
+                
+                // --- UIT LOGO ---
+                if (data.uit_logo_lokaal) {
+                    uitLogo.src = `/static/${data.uit_logo_lokaal}?v=${new Date().getTime()}`;
+                    uitLogo.style.display = 'block';
+                } else {
+                    uitLogo.style.display = 'none';
+                }
+
+                // --- THUIS LOGO ---
+                let homeSrc = "";
+                if (data.thuis_logo_lokaal) {
+                    homeSrc = `/static/${data.thuis_logo_lokaal}`;
+                } else if ("{{ standaard_thuis_logo }}" !== "None" && "{{ standaard_thuis_logo }}" !== "") {
+                    homeSrc = `/static/{{ standaard_thuis_logo }}`;
+                } else {
+                     homeSrc = "https://logoapi.voetbal.nl/logo.php?clubcode=PJSY23I";
+                }
+
+                if (homeSrc) {
+                    if (homeSrc.includes('/static/')) { homeSrc += `?v=${new Date().getTime()}`; }
+                    thuisLogo.src = homeSrc;
+                    thuisLogo.style.display = 'block';
+                } else {
+                    thuisLogo.style.display = 'none';
+                }
+            }
+        }
+
+        // NIEUW: Luister naar dwang-wissel vanuit de server (van je vorige vraag)
+        socket.on('forceer_nieuwe_wedstrijd', (data) => {
+            console.log("Server forceert wissel naar wedstrijd:", data.id);
+            actieveWedstrijdId = data.id;
+            laatsteStatus = ""; // <--- RESET: Zodat de timer wel start bij de nieuwe wedstrijd
+            
+            wachtenDiv.style.display = 'none';
+            liveDiv.style.display = 'flex';
+            stopTimer();
+        });
+
+        socket.on('score_is_geupdate', (data) => {
+            updateDisplay(data);
+            if (data.id === actieveWedstrijdId) {
+                scoreVeld.innerText = `${data.scoreThuis} - ${data.scoreUit}`;
+            }
+        });
+        
+        socket.on('status_is_geupdate', (data) => {
+            updateDisplay(data);
+            
+            if (data.id === actieveWedstrijdId) {
+                const s = data.status.toLowerCase();
+
+                // --- DE FIX: Check of de status echt nieuw is ---
+                if (laatsteStatus === s) {
+                    console.log("Status is hetzelfde, negeer timer reset.");
+                    return; 
+                }
+                laatsteStatus = s; // Update de laatste status
+                // -----------------------------------------------
+
+                if (s.includes('1e helft')) { startTimer(0); } 
+                else if (s.includes('2e helft')) { startTimer(45 * 60); } 
+                else if (s.includes('rust') || s.includes('einde')) { stopTimer(); }
+                else if (!s.includes('helft')) { 
+                    stopTimer(); 
+                    timerVeld.innerText = data.tijd.split(' ')[1] || '00:00'; 
+                }
+
+                if (s.includes('einde wedstrijd')) {
+                    setTimeout(() => {
+                        wachtenDiv.style.display = 'flex'; liveDiv.style.display = 'none';
+                        actieveWedstrijdId = null; stopTimer(); timerVeld.innerText = "00:00";
+                        laatsteStatus = ""; // Reset status bij einde
+                    }, 300000); 
+                }
+            }
+        });
+
+        socket.on('wedstrijd_gestopt', () => {
+            wachtenDiv.style.display = 'flex'; liveDiv.style.display = 'none';
+            actieveWedstrijdId = null; 
+            stopTimer(); 
+            timerVeld.innerText = "00:00";
+            laatsteStatus = ""; // Reset status
+        });
+
+        socket.on('update_sponsor_visibility', (data) => {
+            const balsponsors = document.querySelectorAll('.balsponsor-img');
+            const show = data.active; 
+            balsponsors.forEach(img => {
+                img.style.display = show ? 'inline' : 'none'; 
+            });
+        });
+    </script>
+</body>
+</html>

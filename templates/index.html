@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SV Bedum Scorebord - Beheerder</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 10px; }
+        h1 { text-align: center; color: #003366; font-size: 1.5em; }
+        .container { max-width: 600px; margin: auto; }
+        
+        /* Wedstrijd Kaart */
+        .wedstrijd {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info h2 { margin: 0 0 5px 0; color: #0052a5; font-size: 1.2em; }
+        .info p { margin: 3px 0; font-size: 1em; }
+        .teams { font-weight: bold; font-size: 1.1em; }
+        
+        /* De Grote Activeer Knop */
+        .btn-activeer {
+            background-color: #28a745; color: white;
+            border: none; padding: 12px; width: 100%;
+            font-size: 1.1em; font-weight: bold;
+            border-radius: 5px; margin-top: 10px;
+            cursor: pointer; text-align: center;
+        }
+        
+        /* Modal (Popup) Stijlen */
+        .modal {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe; padding: 20px;
+            border-radius: 10px; text-align: center;
+            max-width: 90%; width: 350px;
+        }
+        .close-btn {
+            background-color: #dc3545; color: white;
+            border: none; padding: 10px 20px;
+            margin-top: 15px; border-radius: 5px;
+            font-size: 1.1em; cursor: pointer; width: 100%;
+        }
+        .qr-display img { width: 100%; height: auto; display: block; margin: 10px 0; }
+        
+        /* Reset knop */
+        .reset-btn {
+             background-color: #dc3545; color: white; padding: 12px; 
+             font-size: 1em; border: none; border-radius: 5px; 
+             cursor: pointer; width: 100%; margin-bottom: 20px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Wedstrijd Activeren</h1>
+        
+        <button onclick="resetScorebord()" class="reset-btn">
+            🛑 Maak Scorebord Vrij / Uitloggen
+        </button>
+
+        {% for wedstrijd in wedstrijden %}
+            <div class="wedstrijd">
+                <div class="info">
+                    <h2>{{ wedstrijd.tijd }}</h2>
+                    <div class="teams">{{ wedstrijd.thuis }} - {{ wedstrijd.uit }}</div>
+                </div>
+            <button class="btn-activeer" onclick="toonQR('{{ wedstrijd.id }}', '{{ wedstrijd.thuis }} vs {{ wedstrijd.uit }}')">
+                ⚡ Activeer Wedstrijd & Toon QR
+            </button>
+            </div>
+        {% else %}
+            <p style="text-align: center;">Geen wedstrijden gevonden.</p>
+        {% endfor %}
+    </div>
+
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Wedstrijd</h3>
+            <p>Laat de teamleider deze code scannen:</p>
+            <div id="qrPlaceholder" class="qr-display">
+                Laden...
+            </div>
+            <button class="close-btn" onclick="sluitModal()">Sluiten</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const modal = document.getElementById('qrModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const qrPlaceholder = document.getElementById('qrPlaceholder');
+
+        function toonQR(id, titel) {
+            modalTitle.innerText = titel;
+            qrPlaceholder.innerHTML = '<p>Genereren...</p>';
+            modal.style.display = 'flex'; // Toon popup
+
+            // Haal de QR op van de server (Fetch API)
+            fetch(`/admin/generate-qr/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Zet de afbeelding erin
+                    qrPlaceholder.innerHTML = `<img src="data:image/png;base64,${data.qr_code}" alt="Scan mij">`;
+                })
+                .catch(err => {
+                    qrPlaceholder.innerHTML = '<p style="color:red">Fout bij laden QR</p>';
+                    console.error(err);
+                });
+        }
+
+        function sluitModal() {
+            modal.style.display = 'none';
+            qrPlaceholder.innerHTML = ''; // Leegmaken voor veiligheid
+        }
+
+        function resetScorebord() {
+            if(confirm("Weet je zeker dat je de huidige wedstrijd wilt afbreken?")) {
+                socket.emit('stop_wedstrijd');
+                alert("Scorebord is vrijgegeven.");
+            }
+        }
+    </script>
+</body>
+</html>

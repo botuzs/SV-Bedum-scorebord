@@ -1,0 +1,196 @@
+import json
+import logging
+import socket 
+import qrcode
+import io 
+import base64 
+# NIEUWE IMPORTS voor de admin pagina
+from flask import Flask, render_template, abort, request, redirect, url_for, session
+from flask_socketio import SocketIO, emit
+
+# --- Configuratie ---
+logging.basicConfig(level=logging.INFO)
+app = Flask(__name__)
+# Secret key is nu verplicht voor 'session'
+app.config['SECRET_KEY'] = 'svbedum_zeer_geheim_wachtwoord_123' 
+socketio = SocketIO(app, async_mode=None)
+
+WEDSTRIJDEN_DB = {}
+SERVER_IP = "127.0.0.1"
+ADMIN_WACHTWOORD = "svbedum" # <-- HET ADMIN WACHTWOORD
+
+# --- NIEUW: Globaal object voor het Kiosk-venster ---
+# Dit object wordt 'geïnjecteerd' vanuit run_kiosk.py
+main_kiosk_window = None
+
+def register_main_window(window):
+    """Ontvangt het 'webview' object van run_kiosk.py"""
+    global main_kiosk_window
+    main_kiosk_window = window
+    logging.info("Hoofdvenster (Kiosk) geregistreerd in server.")
+
+
+# --- Hulpfuncties (Hetzelfde) ---
+
+def laad_wedstrijden_van_json():
+    global WEDSTRIJDEN_DB
+    try:
+        with open('wedstrijden.json', 'r', encoding='utf-8') as f:
+            wedstrijden_lijst = json.load(f)
+            WEDSTRIJDEN_DB = {w['id']: w for w in wedstrijden_lijst}
+            logging.info(f"Succesvol {len(WEDSTRIJDEN_DB)} wedstrijden geladen uit JSON.")
+    except Exception as e:
+        logging.error(f"Fout bij laden JSON: {e}")
+        WEDSTRIJDEN_DB = {}
+
+def get_local_ip():
+    global SERVER_IP
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+        logging.info(f"Server IP adres gevonden: {IP}")
+        SERVER_IP = IP
+    except Exception:
+        logging.warning("Kan lokaal IP-adres niet vinden, gebruik 127.0.0.1 (localhost)")
+        SERVER_IP = '127.0.0.1'
+    finally:
+        s.close()
+    return SERVER_IP
+
+def genereer_qr_code(url):
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+# --- Routes (Webpagina's) ---
+
+@app.route('/')
+def index():
+    """Homepage met QR-codes."""
+    wedstrijden_lijst = sorted(WEDSTRIJDEN_DB.values(), key=lambda x: x['tijd'])
+    base_url = f"http://{SERVER_IP}:5000"
+    
+    for wedstrijd in wedstrijden_lijst:
+        control_url = f"{base_url}/control/{wedstrijd['id']}"
+        wedstrijd['qr_code'] = genereer_qr_code(control_url)
+        
+    return render_template('index.html', wedstrijden=wedstrijden_lijst)
+
+@app.route('/control/<string:wedstrijd_id>')
+def confirm_wedstrijd(wedstrijd_id):
+    """Pagina 1: Bevestiging."""
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd: return abort(404)
+    return render_template('confirm.html', wedstrijd=wedstrijd)
+
+@app.route('/control_panel/<string:wedstrijd_id>')
+def control_panel(wedstrijd_id):
+    """Pagina 2: Bedieningspaneel."""
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd: return abort(404)
+    return render_template('control.html', wedstrijd=wedstrijd)
+
+@app.route('/display')
+def display_page():
+    """De scorebord-weergave pagina."""
+    return render_template('display.html')
+
+# --- NIEUW: Admin & Login Routes ---
+
+@app.route('/login')
+def login_page():
+    """Toont de login-pagina."""
+    return render_template('login.html', error=request.args.get('error'))
+
+@app.route('/admin-login', methods=['POST'])
+def admin_login_post():
+    """Verwerkt het login-formulier."""
+    password = request.form.get('password')
+    if password == ADMIN_WACHTWOORD:
+        session['admin_logged_in'] = True
+        logging.info("Admin succesvol ingelogd.")
+        return redirect(url_for('admin_page'))
+    
+    logging.warning("Admin loginpoging mislukt.")
+    return redirect(url_for('login_page', error=True))
+
+@app.route('/admin')
+def admin_page():
+    """Toont de admin-pagina (alleen als ingelogd)."""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('login_page'))
+    
+    # Haal de huidige hoogte op van het venster
+    current_height = 180 # Default
+    if main_kiosk_window:
+        current_height = main_kiosk_window.height
+        
+    return render_template('admin.html', current_height=current_height)
+
+
+# --- SocketIO Events ---
+
+@socketio.on('update_score')
+def handle_update_score(data):
+    # ... (Deze functie blijft hetzelfde) ...
+    wedstrijd_id = data.get('id')
+    team = data.get('team')
+    change = data.get('change')
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd: return 
+    if team == 'thuis':
+        wedstrijd['scoreThuis'] = max(0, wedstrijd['scoreThuis'] + change)
+    elif team == 'uit':
+        wedstrijd['scoreUit'] = max(0, wedstrijd['scoreUit'] + change)
+    logging.info(f"Update voor {wedstrijd_id}: {wedstrijd['thuis']} {wedstrijd['scoreThuis']} - {wedstrijd['scoreUit']} {wedstrijd['uit']}")
+    emit('score_is_geupdate', wedstrijd, broadcast=True)
+
+@socketio.on('update_status')
+def handle_update_status(data):
+    # ... (Deze functie blijft hetzelfde) ...
+    wedstrijd_id = data.get('id')
+    new_status = data.get('status')
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd: return 
+    wedstrijd['status'] = new_status
+    logging.info(f"Status update voor {wedstrijd_id}: {new_status}")
+    emit('status_is_geupdate', wedstrijd, broadcast=True)
+
+# --- NIEUW: Admin SocketIO Event ---
+
+@socketio.on('admin_resize')
+def handle_admin_resize(data):
+    """Ontvangt het resize-verzoek van de admin-pagina."""
+    global main_kiosk_window
+    if not session.get('admin_logged_in'):
+        logging.warning("Niet-ingelogde gebruiker probeerde te resizen!")
+        return # Alleen ingelogde admins mogen dit
+
+    if main_kiosk_window:
+        try:
+            new_height = int(data.get('height'))
+            if 50 < new_height < 1000: # Safety check
+                logging.info(f"ADMIN RESIZE: Hoogte wordt aangepast naar {new_height}px")
+                # Dit is de magie: roep de resize-functie aan op het venster-object
+                main_kiosk_window.resize(main_kiosk_window.width, new_height)
+        except Exception as e:
+            logging.error(f"Fout bij admin resize: {e}")
+    else:
+        logging.warning("Resize event ontvangen, maar 'main_kiosk_window' is niet (nog) niet ingesteld.")
+
+# --- Server Start Functie ---
+
+def start_server_func():
+    """Deze functie wordt aangeroepen door run_kiosk.py."""
+    logging.info(f"Server start op http://{SERVER_IP}:5000")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+
+# --- Hoofdblok (voor direct draaien van app.py) ---
+if __name__ == '__main__':
+    logging.warning("--- Server direct gestart (NIET KIOSK) ---")
+    logging.warning("Admin resize-functie zal niet werken in deze modus.")
+    laad_wedstrijden_van_json()
+    get_local_ip()
+    start_server_func()

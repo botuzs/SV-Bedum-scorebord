@@ -1,0 +1,22 @@
+{
+    "monitor_width": 1536,
+    "monitor_height": 864,
+    "x": 0,
+    "y": 0,
+    "width": 690,
+    "height": 340,
+    "theme": {
+        "tailscale_url": "desktop-7nugm72.tail56da5b.ts.net",
+        "background_color": "#4a148c",
+        "timer_color": "#000000",
+        "timer_size": 4,
+        "score_color": "#ffffff",
+        "score_size": 10,
+        "logo_size": 25,
+        "banner_color": "#ffffff",
+        "top_banner_width": 40,
+        "sponsor_bar_height": 14,
+        "bottom_banner_width": 60,
+        "standaard_thuis_logo": "clublogos/default_home_logo-sv-bedum.png"
+    }
+}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bevestig Wedstrijd</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f0f0f0; }
+        .container { max-width: 500px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #003366; }
+        .teams { font-size: 1.2em; font-weight: bold; margin: 15px 0; }
+        .tijd { font-size: 1.1em; color: #555; margin-bottom: 25px; }
+        .button {
+            display: inline-block;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px;
+        }
+        .confirm { background-color: #28a745; color: white; }
+        .cancel { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bevestig Wedstrijd</h1>
+        <p>Je staat op het punt om de volgende wedstrijd te bedienen:</p>
+        
+        <p class="tijd">{{ wedstrijd.tijd }}</p>
+        <p class="teams">{{ wedstrijd.thuis }}</p>
+        <p>vs</p>
+        <p class="teams">{{ wedstrijd.uit }}</p>
+
+        <p>Klopt dit?</p>
+        {% if overwrite %}
+        <div style="background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; border: 1px solid #ffeeba; margin-top: 15px;">
+            <strong>WAARSCHUWING:</strong> Er is al een andere wedstrijd actief op het scorebord.
+            Als je doorgaat, wordt de huidige wedstrijd overschreven.
+        </div>
+        {% endif %}
+        <div>
+            <a href="{{ url_for('control_panel', wedstrijd_id=wedstrijd.id) }}" class="button confirm">
+                {% if overwrite %}
+                    Ja, overschrijven
+                {% else %}
+                    Ja, start bediening
+                {% endif %}
+            </a>
+            <a href="/welcome" class="button cancel">Nee, terug</a>
+        </div>
+    </div>
+</body>
+</html>

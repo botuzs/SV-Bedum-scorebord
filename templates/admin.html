@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Paneel</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .setting { margin-top: 15px; }
+        label { font-size: 1.1em; font-weight: bold; }
+        input[type="range"] { width: 100%; margin-top: 5px; }
+        input[type="color"] { width: 60px; height: 40px; padding: 0; border: none; background: none; }
+        input[type="number"] { width: 80px; padding: 5px; font-size: 1em; }
+        .value-display { font-size: 1.1em; font-weight: bold; color: #007bff; text-align: left; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .theme-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: center; }
+        .restart-note { 
+            background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
+            padding: 15px; border-radius: 5px; margin-top: 20px; font-weight: bold;
+        }
+        .restart-btn {
+            background-color: #dc3545; color: white; border: none;
+            padding: 15px 20px; font-size: 1.2em; font-weight: bold;
+            border-radius: 5px; cursor: pointer; width: 100%; margin-top: 10px;
+        }
+        .restart-btn:hover { background-color: #c82333; }
+        .restart-btn:disabled { background-color: #555; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Paneel</h1>
+        <div class="container">
+        <h1>Admin Paneel</h1>
+        
+        <a href="/admin/sponsors" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold;">
+            Beheer Sponsoren &gt;
+        </a>
+
+        <a href="/admin/matches" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold; margin-top: 5px;">
+            Beheer Wedstrijden &gt;
+        </a>
+        
+        <h2>Venster Positie & Grootte (Live)</h2>
+        <h2>Venster Positie & Grootte (Live)</h2>
+        <div id="window-settings">
+            <div class="grid">
+                <div class="setting">
+                    <label>Positie X (Links/Rechts)</label>
+                    <input type="range" id="xSlider" min="-50" max="{{ monitor_width }}" step="1" 
+                           value="{{ window_data.current_x }}" class="window-slider">
+                    <span class="value-display" id="xValue">{{ window_data.current_x }} px</span>
+                </div>
+                <div class="setting">
+                    <label>Positie Y (Boven/Onder)</label>
+                    <input type="range" id="ySlider" min="-50" max="{{ monitor_height }}" step="1" 
+                           value="{{ window_data.current_y }}" class="window-slider">
+                    <span class="value-display" id="yValue">{{ window_data.current_y }} px</span>
+                </div>
+            </div>
+            <div class="grid">
+                <div class="setting">
+                    <label>Breedte</label>
+                    <input type="range" id="widthSlider" min="100" max="{{ monitor_width }}" step="10" 
+                           value="{{ window_data.current_width }}" class="window-slider">
+                    <span class="value-display" id="widthValue">{{ window_data.current_width }} px</span>
+                </div>
+                <div class="setting">
+                    <label>Hoogte</label>
+                    <input type="range" id="heightSlider" min="-50" max="{{ monitor_height }}" step="10" 
+                           value="{{ window_data.current_height }}" class="window-slider">
+                    <span class="value-display" id="heightValue">{{ window_data.current_height }} px</span>
+                </div>
+            </div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h2>Netwerk Instellingen (Herstart vereist)</h2>
+        <div class="restart-note">
+            De QR codes op de hoofdpagina veranderen pas na een herstart van de app.
+        </div>
+        <div id="network-settings" style="margin-top: 20px;">
+            <div class="setting">
+                <label for="tailscale_url">Tailscale Adres (bv: scorebord.tailnet.ts.net)</label>
+                <input type="text" id="tailscale_url" class="theme-input" 
+                       value="{{ theme_data.tailscale_url }}" 
+                       style="width: 100%; padding: 8px; font-size: 1.1em; box-sizing: border-box;">
+            </div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h2>Thema Instellingen (Herstart vereist)</h2>
+        <div class="restart-note">
+            Thema-wijzigingen worden pas zichtbaar nadat je de scorebord-app (run_kiosk.py) herstart.
+        </div>
+        <div id="theme-settings" style="margin-top: 20px;">
+
+            <div class="theme-grid" style="grid-column: 1 / -1; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+                <label>Standaard Thuis Logo</label>
+                <form action="/admin/upload-home-logo" method="POST" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px;">
+                    <input type="file" name="home_logo" accept="image/*">
+                    <button type="submit" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">Uploaden</button>
+                </form>
+                
+                <div style="text-align: center;">
+                    {% if theme_data.standaard_thuis_logo %}
+                        <img src="{{ url_for('static', filename=theme_data.standaard_thuis_logo) }}" style="height: 50px;">
+                        <br><small>Huidig</small>
+                    {% else %}
+                        <small>Geen (Standaard KNVB)</small>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Achtergrondkleur</label>
+                <input type="color" id="background_color" class="theme-input" value="{{ theme_data.background_color }}">
+                <span></span>
+            </div>
+            
+            <div class="theme-grid" style="margin-top: 20px;">
+                <label>Timer (Bovenbalk)</label>
+                <input type="color" id="timer_color" class="theme-input" data-type="color" value="{{ theme_data.timer_color }}">
+                <div class="setting">
+                    <input type="number" id="timer_size" class="theme-input" data-type="number" value="{{ theme_data.timer_size }}" step="0.1"> (vw)
+                </div>
+            </div>
+
+            <div class="theme-grid">
+                <label>Score</label>
+                <input type="color" id="score_color" class="theme-input" data-type="color" value="{{ theme_data.score_color }}">
+                <div class="setting">
+                    <input type="number" id="score_size" class="theme-input" data-type="number" value="{{ theme_data.score_size }}" step="0.1"> (vw)
+                </div>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Logo Grootte</label>
+                <div class="setting">
+                    <input type="number" id="logo_size" class="theme-input" data-type="number" value="{{ theme_data.logo_size }}" step="1"> (vh)
+                </div>
+                <span></span>
+            </div>
+            
+            <hr style="grid-column: 1 / -1; margin: 15px 0;">
+
+            <div class="theme-grid">
+                <label>Banner Kleur</label>
+                <input type="color" id="banner_color" class="theme-input" data-type="color" value="{{ theme_data.banner_color }}">
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Top Banner Breedte</label>
+                <div class="setting">
+                    <input type="number" id="top_banner_width" class="theme-input" data-type="number" value="{{ theme_data.top_banner_width }}" min="20" max="100" step="1"> (%)
+                </div>
+                <span></span>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Sponsorbalk Hoogte</label>
+                <div class="setting">
+                    <input type="number" id="sponsor_bar_height" class="theme-input" data-type="number" value="{{ theme_data.sponsor_bar_height }}" step="1"> (vh)
+                </div>
+                <span></span>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Bottom Banner Breedte</label>
+                <div class="setting">
+                    <input type="number" id="bottom_banner_width" class="theme-input" data-type="number" value="{{ theme_data.bottom_banner_width }}" min="20" max="100" step="1"> (%)
+                </div>
+                <span></span>
+            </div>
+
+        </div>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>Applicatie Herstarten</h2>
+        <button id="restartButton" class="restart-btn">Herstart Applicatie</button>
+
+    </div>
+
+    <script>
+        const socket = io();
+        
+        // --- Venster Socket (Live) ---
+        const windowSliders = document.querySelectorAll('.window-slider');
+        const displays = {
+            x: document.getElementById('xValue'), y: document.getElementById('yValue'),
+            width: document.getElementById('widthValue'), height: document.getElementById('heightValue')
+        };
+        
+        function sendTransformUpdate() {
+            const data = {
+                x: parseInt(document.getElementById('xSlider').value),
+                y: parseInt(document.getElementById('ySlider').value),
+                width: parseInt(document.getElementById('widthSlider').value),
+                height: parseInt(document.getElementById('heightSlider').value)
+            };
+            socket.emit('admin_transform', data);
+        }
+        windowSliders.forEach(slider => {
+            slider.addEventListener('input', () => {
+                const id = slider.id.replace('Slider', '');
+                displays[id].innerText = slider.value + ' px';
+            });
+            slider.addEventListener('change', sendTransformUpdate);
+        });
+
+        // --- Thema Socket (Geen live update) ---
+        const themeInputs = document.querySelectorAll('.theme-input');
+        
+        function sendThemeUpdate() {
+            const themeData = {};
+            themeInputs.forEach(input => {
+                themeData[input.id] = (input.dataset.type === 'number') ? parseFloat(input.value) : input.value;
+            });
+            console.log('Opslaan Thema (herstart vereist):', themeData);
+            socket.emit('admin_update_theme', themeData);
+        }
+        themeInputs.forEach(input => {
+            input.addEventListener('change', sendThemeUpdate);
+        });
+        
+        // --- Herstart Knop ---
+        const restartButton = document.getElementById('restartButton');
+        restartButton.addEventListener('click', () => {
+            if (confirm('Weet je zeker dat je de scorebord-app wilt herstarten?')) {
+                console.log('Versturen: admin_restart');
+                socket.emit('admin_restart');
+                restartButton.disabled = true;
+                restartButton.innerText = 'Herstarten...';
+            }
+        });
+    </script>
+</body>
+</html>

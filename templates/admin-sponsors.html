@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sponsoren</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        a { color: #007bff; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .box { background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee; }
+        input[type="file"] { margin-top: 10px; }
+        button {
+            background-color: #007bff; color: white; border: none;
+            padding: 10px 15px; font-size: 1em; font-weight: bold;
+            border-radius: 5px; cursor: pointer; margin-top: 10px;
+        }
+        .sponsor-list { list-style: none; padding: 0; }
+        .sponsor-list li {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px; border-bottom: 1px solid #ddd;
+        }
+        .sponsor-list img { height: 40px; width: auto; margin-right: 15px; }
+        .controls { display: flex; gap: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p><a href="/admin">&lt; Terug naar Hoofd Admin</a></p>
+        <h1>Sponsor Beheer</h1>
+
+        <div class="grid">
+            <div class="box">
+                <h2>Sponsor Uploaden</h2>
+                <form action="/admin/upload-sponsor" method="POST" enctype="multipart/form-data">
+                    <label for="sponsor_file">Kies een .png of .jpg bestand:</label>
+                    <input type="file" id="sponsor_file" name="sponsor_file" accept="image/png, image/jpeg" required>
+                    <button type="submit">Uploaden</button>
+                </form>
+            </div>
+
+            <div class="box">
+                <h2>Sponsoren Selecteren</h2>
+                <p>Selecteer 1 Hoofdsponsor en max 2 Balsponsoren.</p>
+                <form action="/admin/select-sponsors" method="POST">
+                    <ul class="sponsor-list">
+                        {% for file in all_sponsor_files %}
+                        <li>
+                            <span>
+                                <img src="{{ url_for('static', filename='sponsors/' + file) }}" alt="{{ file }}">
+                                {{ file }}
+                            </span>
+                            <span class="controls">
+                                <label title="Altijd zichtbaar">
+                                    <input type="radio" name="hoofdsponsor" value="sponsors/{{ file }}"
+                                        {% if huidige_hoofdsponsor and file == huidige_hoofdsponsor.split('/')[-1] %}checked{% endif %}>                                    Hoofd
+                                </label>
+                                <label title="Alleen bij vinkje">
+                                    <input type="checkbox" name="balsponsor" value="sponsors/{{ file }}"
+                                        {% if ('sponsors/' + file) in huidige_balsponsoren %}checked{% endif %}>
+                                    Balsponsor
+                                </label>
+                            </span>
+                        </li>
+                        {% else %}
+                        <li>Geen sponsors gevonden. Upload er eerst een paar.</li>
+                        {% endfor %}
+                    </ul>
+                    <button type="submit">Selectie Opslaan</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
