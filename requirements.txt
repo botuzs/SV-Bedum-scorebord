@@ -1,0 +1,9 @@
+flask
+flask-socketio
+requests
+beautifulsoup4
+pywebview
+qrcode
+selenium
+webdriver-manager
+Pillow

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sponsoren</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; }
+        h1, h2 { color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .box { background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee; }
+        .sponsor-list { list-style: none; padding: 0; }
+        .sponsor-list li {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px; border-bottom: 1px solid #ddd;
+        }
+        .sponsor-list img { height: 50px; width: auto; margin-right: 15px; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p><a href="/admin">&lt; Terug naar Hoofd Admin</a></p>
+        <h1>Sponsor Beheer</h1>
+
+        <div class="grid">
+            <div class="box">
+                <h2>1. Uploaden</h2>
+                <form action="/admin/upload-sponsor" method="POST" enctype="multipart/form-data">
+                    <label>Kies bestand:</label><br>
+                    <input type="file" name="sponsor_file" accept="image/png, image/jpeg" required>
+                    <button type="submit">Upload</button>
+                </form>
+            </div>
+
+            <div class="box">
+                <h2>2. Selecteer Sponsoren</h2>
+                <p>Selecteer de sponsoren die onder de tijd moeten roteren.</p>
+                <form action="/admin/select-sponsors" method="POST">
+                    <ul class="sponsor-list">
+                        {% for file in all_sponsor_files %}
+                        <li>
+                            <div style="display:flex; align-items:center;">
+                                <img src="{{ url_for('static', filename='sponsors/' + file) }}">
+                                {{ file }}
+                            </div>
+                            <label>
+                                <input type="checkbox" name="sponsors" value="{{ file }}"
+                                    {% if huidige_hoofdsponsor and file in huidige_hoofdsponsor %}checked{% endif %}>
+                                Selecteer
+                            </label>
+                        </li>
+                        {% else %}
+                        <li>Geen bestanden. Upload eerst iets.</li>
+                        {% endfor %}
+                    </ul>
+                    <button type="submit">Opslaan</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

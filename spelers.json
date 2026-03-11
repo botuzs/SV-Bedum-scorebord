@@ -1,0 +1,23 @@
+[
+    {
+        "id": "d6c45d0e-c7e5-4750-bd1d-7e4f7c9c9813",
+        "naam": "Jos Broekman",
+        "rugnummer": 1,
+        "foto_profiel": "static/players/d6c45d0e-c7e5-4750-bd1d-7e4f7c9c9813_foto_profiel.png",
+        "foto_actie": "static/players/d6c45d0e-c7e5-4750-bd1d-7e4f7c9c9813_foto_actie.png"
+    },
+    {
+        "id": "",
+        "naam": "Albert Niemeijer",
+        "rugnummer": 3,
+        "foto_profiel": "static/players/foto_profiel.png",
+        "foto_actie": "static/players/foto_actie.webp"
+    },
+    {
+        "id": "feeab1b2-8a8f-4ca9-9809-c020492de690",
+        "naam": "Arjen Robben",
+        "rugnummer": 32,
+        "foto_profiel": "static/players/feeab1b2-8a8f-4ca9-9809-c020492de690_foto_profiel.png",
+        "foto_actie": "static/players/feeab1b2-8a8f-4ca9-9809-c020492de690_foto_actie.png"
+    }
+]
