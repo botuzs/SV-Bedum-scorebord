@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Paneel</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .setting { margin-top: 15px; }
+        label { font-size: 1.1em; font-weight: bold; }
+        input[type="range"] { width: 100%; margin-top: 5px; }
+        input[type="color"] { width: 60px; height: 40px; padding: 0; border: none; background: none; }
+        input[type="number"] { width: 80px; padding: 5px; font-size: 1em; }
+        .value-display { font-size: 1.1em; font-weight: bold; color: #007bff; text-align: left; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .theme-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: center; }
+        .restart-note { 
+            background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
+            padding: 15px; border-radius: 5px; margin-top: 20px; font-weight: bold;
+        }
+        .restart-btn {
+            background-color: #dc3545; color: white; border: none;
+            padding: 15px 20px; font-size: 1.2em; font-weight: bold;
+            border-radius: 5px; cursor: pointer; width: 100%; margin-top: 10px;
+        }
+        .restart-btn:hover { background-color: #c82333; }
+        .restart-btn:disabled { background-color: #555; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Paneel</h1>
+        
+        <a href="/admin/sponsors" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold;">
+            Beheer Sponsoren &gt;
+        </a>
+
+        <a href="/admin/matches" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold; margin-top: 5px;">
+            Beheer Wedstrijden &gt;
+        </a>
+        
+        <h2>Venster Positie & Grootte (Live)</h2>
+        <div id="window-settings">
+            <div class="grid">
+                <div class="setting">
+                    <label>Positie X (Links/Rechts)</label>
+                    <input type="range" id="xSlider" min="-50" max="{{ monitor_width }}" step="1" 
+                           value="{{ window_data.current_x }}" class="window-slider">
+                    <span class="value-display" id="xValue">{{ window_data.current_x }} px</span>
+                </div>
+                <div class="setting">
+                    <label>Positie Y (Boven/Onder)</label>
+                    <input type="range" id="ySlider" min="-50" max="{{ monitor_height }}" step="1" 
+                           value="{{ window_data.current_y }}" class="window-slider">
+                    <span class="value-display" id="yValue">{{ window_data.current_y }} px</span>
+                </div>
+            </div>
+            <div class="grid">
+                <div class="setting">
+                    <label>Breedte</label>
+                    <input type="range" id="widthSlider" min="100" max="{{ monitor_width }}" step="10" 
+                           value="{{ window_data.current_width }}" class="window-slider">
+                    <span class="value-display" id="widthValue">{{ window_data.current_width }} px</span>
+                </div>
+                <div class="setting">
+                    <label>Hoogte</label>
+                    <input type="range" id="heightSlider" min="-50" max="{{ monitor_height }}" step="10" 
+                           value="{{ window_data.current_height }}" class="window-slider">
+                    <span class="value-display" id="heightValue">{{ window_data.current_height }} px</span>
+                </div>
+            </div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h2>Netwerk Instellingen (Herstart vereist)</h2>
+        <div class="restart-note">
+            De QR codes op de hoofdpagina veranderen pas na een herstart van de app.
+        </div>
+        <div id="network-settings" style="margin-top: 20px;">
+            <div class="setting">
+                <label for="tailscale_url">Tailscale Adres (bv: scorebord.tailnet.ts.net)</label>
+                <input type="text" id="tailscale_url" class="theme-input"
+                       value="{{ theme_data.tailscale_url }}"
+                       style="width: 100%; padding: 8px; font-size: 1.1em; box-sizing: border-box;">
+            </div>
+            <div class="setting" style="margin-top: 15px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
+                <label style="color: #856404;">Master Server IP (voor synchronisatie bij opstarten)</label>
+                <div class="grid" style="margin-top: 10px;">
+                    <div>
+                        <label style="font-size: 0.9em;">IP Adres</label>
+                        <input type="text" id="master_ip"
+                               value="{{ master_ip }}"
+                               placeholder="bijv. 10.0.50.28"
+                               style="width: 100%; padding: 8px; font-size: 1em; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.9em;">Poort</label>
+                        <input type="number" id="master_port"
+                               value="{{ master_port }}"
+                               placeholder="5000"
+                               style="width: 100%; padding: 8px; font-size: 1em; box-sizing: border-box;">
+                    </div>
+                </div>
+                <button onclick="saveMasterIp()" style="margin-top: 10px; padding: 8px 20px; background: #856404; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    Opslaan
+                </button>
+                <span id="masterIpResult" style="margin-left: 10px; font-size: 0.9em;"></span>
+            </div>
+            <div class="setting" style="margin-top: 15px; padding: 15px; background: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 5px;">
+                <label style="color: #0052a5;">Sponsor Server (voor extra sponsoren eerste elftal)</label>
+                <div class="grid" style="margin-top: 10px;">
+                    <div>
+                        <label style="font-size: 0.9em;">IP Adres</label>
+                        <input type="text" id="sponsor_server_ip"
+                               value="{{ theme_data.get('sponsor_server_ip', '') if theme_data.get is defined else '' }}"
+                               placeholder="bijv. 192.168.0.100"
+                               style="width: 100%; padding: 8px; font-size: 1em; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.9em;">Poort</label>
+                        <input type="number" id="sponsor_server_port"
+                               value="{{ theme_data.get('sponsor_server_port', 4000) if theme_data.get is defined else 4000 }}"
+                               placeholder="4000"
+                               style="width: 100%; padding: 8px; font-size: 1em; box-sizing: border-box;">
+                    </div>
+                </div>
+                <button onclick="saveSponsorServer()" style="margin-top: 10px; padding: 8px 20px; background: #0052a5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    Opslaan
+                </button>
+                <button onclick="testSponsorServer()" style="margin-top: 10px; margin-left: 5px; padding: 8px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Test Verbinding
+                </button>
+                <span id="sponsorTestResult" style="margin-left: 10px; font-size: 0.9em;"></span>
+            </div>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h2>Thema Instellingen (Herstart vereist)</h2>
+        <div class="restart-note">
+            Thema-wijzigingen worden pas zichtbaar nadat je de scorebord-app (run_kiosk.py) herstart.
+        </div>
+        <div id="theme-settings" style="margin-top: 20px;">
+
+            <div class="theme-grid" style="grid-column: 1 / -1; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+                <label>Standaard Thuis Logo</label>
+                <form action="/admin/upload-home-logo" method="POST" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px;">
+                    <input type="file" name="home_logo" accept="image/*">
+                    <button type="submit" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">Uploaden</button>
+                </form>
+                
+                <div style="text-align: center;">
+                    {% if theme_data.standaard_thuis_logo %}
+                        <img src="{{ url_for('static', filename=theme_data.standaard_thuis_logo) }}" style="height: 50px;">
+                        <br><small>Huidig</small>
+                    {% else %}
+                        <small>Geen (Standaard KNVB)</small>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Achtergrondkleur</label>
+                <input type="color" id="background_color" class="theme-input" value="{{ theme_data.background_color }}">
+                <span></span>
+            </div>
+            
+            <div class="theme-grid" style="margin-top: 20px;">
+                <label>Timer (Bovenbalk)</label>
+                <input type="color" id="timer_color" class="theme-input" data-type="color" value="{{ theme_data.timer_color }}">
+                <div class="setting">
+                    <input type="number" id="timer_size" class="theme-input" data-type="number" value="{{ theme_data.timer_size }}" step="0.1"> (vw)
+                </div>
+            </div>
+
+            <div class="mb-3" style="margin-top: 20px;">
+                <label class="form-label" style="display:block; font-weight:bold;">Hoogte Timer Balk (vh)</label>
+                <div style="display:flex; align-items: center; width: 100%;">
+                    <input type="range" 
+                        id="top_bar_height" 
+                        class="theme-input" 
+                        style="flex-grow: 1;"
+                        data-type="number"
+                        min="5" max="30" step="1" 
+                        value="{{ theme_data.top_bar_height }}" 
+                        oninput="this.nextElementSibling.innerText = this.value">
+                    <span style="margin-left: 10px; font-weight:bold; min-width: 30px;">{{ theme_data.top_bar_height }}</span>
+                </div>
+                <div style="font-size: 0.9em; color: #666;">De hoogte van de bovenste balk in % van het scherm.</div>
+            </div>
+            
+            <div class="theme-grid" style="margin-top: 20px;">
+                <label>Padding Score (Afstand midden)</label>
+                <div class="setting">
+                    <input type="range" id="score_padding" class="theme-input" data-type="number" 
+                           min="0" max="10" step="0.5" value="{{ theme_data.score_padding|default(2) }}">
+                    <span id="disp_score_padding">{{ theme_data.score_padding|default(2) }}</span> vw
+                </div>
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Verticale Spacing (Hoogte elementen)</label>
+                <div class="setting">
+                    <input type="range" id="vertical_spacing" class="theme-input" data-type="number" 
+                           min="0" max="10" step="0.5" value="{{ theme_data.vertical_spacing|default(1) }}">
+                    <span id="disp_vertical_spacing">{{ theme_data.vertical_spacing|default(1) }}</span> vh
+                </div>
+                <span></span>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Ronding Scoops (Inkepingen)</label>
+                <div class="setting">
+                    <input type="range" id="border_radius" class="theme-input" data-type="number" 
+                           min="0" max="10" step="0.5" value="{{ theme_data.border_radius|default(3) }}">
+                    <span id="disp_border_radius">{{ theme_data.border_radius|default(3) }}</span> vh
+                </div>
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Score</label>
+                <input type="color" id="score_color" class="theme-input" data-type="color" value="{{ theme_data.score_color }}">
+                <div class="setting">
+                    <input type="number" id="score_size" class="theme-input" data-type="number" value="{{ theme_data.score_size }}" step="0.1"> (vw)
+                </div>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Logo Grootte</label>
+                <div class="setting">
+                    <input type="number" id="logo_size" class="theme-input" data-type="number" value="{{ theme_data.logo_size }}" step="1"> (vh)
+                </div>
+                <span></span>
+            </div>
+
+            
+            <hr style="grid-column: 1 / -1; margin: 15px 0;">
+
+            <div class="theme-grid">
+                <label>Banner Kleur</label>
+                <input type="color" id="banner_color" class="theme-input" data-type="color" value="{{ theme_data.banner_color }}">
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Top Banner Breedte</label>
+                <div class="setting">
+                    <input type="number" id="top_banner_width" class="theme-input" data-type="number" value="{{ theme_data.top_banner_width }}" min="20" max="100" step="1"> (%)
+                </div>
+                <span></span>
+            </div>
+            
+            <hr style="grid-column: 1 / -1; margin: 15px 0;">
+            <h3>Speler Weergave (Opstelling & Goal)</h3>
+
+            <div class="theme-grid">
+                <label>Achtergrond Overlay</label>
+                <input type="color" id="player_overlay_bg" class="theme-input" value="{{ theme_data.player_overlay_bg|default('#000000') }}">
+                <div class="setting">
+                    <small>Transparantie:</small>
+                    <input type="range" id="player_overlay_opacity" class="theme-input" data-type="number" 
+                           min="0" max="1" step="0.05" value="{{ theme_data.player_overlay_opacity|default(0.95) }}">
+                </div>
+            </div>
+
+            <div class="theme-grid">
+                <label>Breedte Spelerkaart</label>
+                <div class="setting">
+                    <input type="range" id="player_card_width" class="theme-input" data-type="number" 
+                           min="30" max="100" step="1" value="{{ theme_data.player_card_width|default(90) }}">
+                    <span id="disp_player_card_width">{{ theme_data.player_card_width|default(90) }}</span> %
+                </div>
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Foto Hoogte</label>
+                <div class="setting">
+                    <input type="range" id="player_img_height" class="theme-input" data-type="number" 
+                           min="20" max="100" step="1" value="{{ theme_data.player_img_height|default(80) }}">
+                    <span id="disp_player_img_height">{{ theme_data.player_img_height|default(80) }}</span> vh
+                </div>
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Rugnummer</label>
+                <input type="color" id="player_nr_color" class="theme-input" value="{{ theme_data.player_nr_color|default('#ffcc00') }}">
+                <div class="setting">
+                    <input type="range" id="player_nr_size" class="theme-input" data-type="number" 
+                           min="2" max="30" step="0.5" value="{{ theme_data.player_nr_size|default(12) }}">
+                    <span id="disp_player_nr_size">{{ theme_data.player_nr_size|default(12) }}</span> vw
+                </div>
+            </div>
+
+            <div class="theme-grid">
+                <label>Naam Speler</label>
+                <input type="color" id="player_name_color" class="theme-input" value="{{ theme_data.player_name_color|default('#ffffff') }}">
+                <div class="setting">
+                    <input type="range" id="player_name_size" class="theme-input" data-type="number" 
+                           min="1" max="20" step="0.5" value="{{ theme_data.player_name_size|default(5) }}">
+                    <span id="disp_player_name_size">{{ theme_data.player_name_size|default(5) }}</span> vw
+                </div>
+            </div>
+
+            
+            <hr style="grid-column: 1 / -1; margin: 15px 0;">
+            <h3>Top Sponsor (Boven Timer)</h3>
+            
+            <div class="theme-grid">
+                <label>Hoogte Sponsorbalk</label>
+                <div class="setting">
+                    <input type="range" id="top_sponsor_height" class="theme-input" data-type="number" 
+                           min="0" max="30" step="1" value="{{ theme_data.top_sponsor_height|default(15) }}">
+                    <span id="disp_top_sponsor_height">{{ theme_data.top_sponsor_height|default(15) }}</span> vh
+                </div>
+                <span></span>
+            </div>
+
+            <div class="theme-grid">
+                <label>Grootte Logo (Zoom)</label>
+                <div class="setting">
+                    <input type="range" id="top_sponsor_size" class="theme-input" data-type="number" 
+                           min="10" max="100" step="1" value="{{ theme_data.top_sponsor_size|default(80) }}">
+                    <span id="disp_top_sponsor_size">{{ theme_data.top_sponsor_size|default(80) }}</span> %
+                </div>
+                <span></span>
+            </div>
+            
+            <div class="theme-grid">
+                <label>Bottom Banner Breedte</label>
+                <div class="setting">
+                    <input type="number" id="bottom_banner_width" class="theme-input" data-type="number" value="{{ theme_data.bottom_banner_width }}" min="20" max="100" step="1"> (%)
+                </div>
+                <span></span>
+            </div>
+
+        </div>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>Applicatie Herstarten</h2>
+        <button id="restartButton" class="restart-btn">Herstart Applicatie</button>
+
+    </div>
+
+    <script>
+        const socket = io();
+        
+        // --- Venster Socket (Live) ---
+        const windowSliders = document.querySelectorAll('.window-slider');
+        const displays = {
+            x: document.getElementById('xValue'), y: document.getElementById('yValue'),
+            width: document.getElementById('widthValue'), height: document.getElementById('heightValue')
+        };
+        
+        function sendTransformUpdate() {
+            const data = {
+                x: parseInt(document.getElementById('xSlider').value),
+                y: parseInt(document.getElementById('ySlider').value),
+                width: parseInt(document.getElementById('widthSlider').value),
+                height: parseInt(document.getElementById('heightSlider').value)
+            };
+            socket.emit('admin_transform', data);
+        }
+        windowSliders.forEach(slider => {
+            slider.addEventListener('input', () => {
+                const id = slider.id.replace('Slider', '');
+                displays[id].innerText = slider.value + ' px';
+            });
+            slider.addEventListener('change', sendTransformUpdate);
+        });
+
+        // --- Thema Socket (Geen live update) ---
+        const themeInputs = document.querySelectorAll('.theme-input');
+        
+        function sendThemeUpdate() {
+            const themeData = {};
+            themeInputs.forEach(input => {
+                themeData[input.id] = (input.dataset.type === 'number') ? parseFloat(input.value) : input.value;
+            });
+            console.log('Opslaan Thema (herstart vereist):', themeData);
+            socket.emit('admin_update_theme', themeData);
+        }
+        themeInputs.forEach(input => {
+            input.addEventListener('change', sendThemeUpdate);
+        });
+
+        // Update deze lijst met de nieuwe ID's
+        // HIER IS DE FIX: top_bar_height TOEGEVOEGD!
+        const liveSliders = [
+            'score_padding', 'vertical_spacing', 'border_radius',
+            'player_overlay_opacity', 'player_card_width', 'player_img_height',
+            'player_nr_size', 'player_name_size', 'top_sponsor_height', 'top_sponsor_size',
+            'top_bar_height'
+        ];
+        
+        liveSliders.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('input', () => {
+                    // Zoek de span/output direct naast de slider (werkt voor meeste sliders in je layout)
+                    if(el.nextElementSibling) {
+                        el.nextElementSibling.innerText = el.value;
+                    }
+                    // Forceer update zodat je het meteen ziet schuiven
+                    sendThemeUpdate(); 
+                });
+            }
+        });
+        
+        // --- Herstart Knop ---
+        const restartButton = document.getElementById('restartButton');
+        restartButton.addEventListener('click', () => {
+            if (confirm('Weet je zeker dat je de scorebord-app wilt herstarten?')) {
+                console.log('Versturen: admin_restart');
+                socket.emit('admin_restart');
+                restartButton.disabled = true;
+                restartButton.innerText = 'Herstarten...';
+            }
+        });
+        // --- Master Server IP ---
+        function saveMasterIp() {
+            const ip = document.getElementById('master_ip').value.trim();
+            const port = parseInt(document.getElementById('master_port').value) || 5000;
+            fetch('/admin/save-master-ip', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ip: ip, port: port})
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('masterIpResult').innerText = 'Opgeslagen!';
+                document.getElementById('masterIpResult').style.color = '#28a745';
+            })
+            .catch(() => {
+                document.getElementById('masterIpResult').innerText = 'Fout bij opslaan';
+                document.getElementById('masterIpResult').style.color = '#dc3545';
+            });
+        }
+
+        // --- Sponsor Server Instellingen ---
+        function saveSponsorServer() {
+            const ip = document.getElementById('sponsor_server_ip').value.trim();
+            const port = parseInt(document.getElementById('sponsor_server_port').value) || 4000;
+
+            fetch('/admin/save-sponsor-server', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ip: ip, port: port})
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('sponsorTestResult').innerText = 'Opgeslagen!';
+                document.getElementById('sponsorTestResult').style.color = '#28a745';
+            })
+            .catch(() => {
+                document.getElementById('sponsorTestResult').innerText = 'Fout bij opslaan';
+                document.getElementById('sponsorTestResult').style.color = '#dc3545';
+            });
+        }
+
+        function testSponsorServer() {
+            const result = document.getElementById('sponsorTestResult');
+            result.innerText = 'Testen...';
+            result.style.color = '#888';
+
+            fetch('/admin/test-sponsor-server')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok) {
+                        result.innerText = `Verbonden! ${data.count} actieve sponsor(en) gevonden.`;
+                        result.style.color = '#28a745';
+                    } else {
+                        result.innerText = `Fout: ${data.error}`;
+                        result.style.color = '#dc3545';
+                    }
+                })
+                .catch(() => {
+                    result.innerText = 'Kan server niet bereiken';
+                    result.style.color = '#dc3545';
+                });
+        }
+    </script>
+</body>
+</html>

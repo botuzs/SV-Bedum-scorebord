@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Bediening</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #333; color: white; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: auto; padding: 15px; }
+        .teams { text-align: center; font-size: 1.2em; padding: 10px; background: #444; border-radius: 5px; }
+        .score-display { display: flex; justify-content: space-around; align-items: center; margin: 20px 0; }
+        .team { text-align: center; }
+        .team-name { font-size: 1.1em; color: #ccc; }
+        .score { font-size: 4.5em; font-weight: bold; margin: 10px 0; }
+        .score-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn { padding: 25px; font-size: 1.5em; border: none; border-radius: 8px; cursor: pointer; }
+        .btn-plus { background-color: #28a745; color: white; }
+        .btn-min { background-color: #dc3545; color: white; }
+        .status-controls { margin-top: 25px; }
+        .status-controls h3 { text-align: center; margin-bottom: 15px; }
+        .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-status { background-color: #007bff; color: white; padding: 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; }
+        #huidigeStatus { text-align: center; font-size: 1.3em; margin-top: 20px; color: #ffc107; font-weight: bold; }
+        hr { border-color: #555; margin: 20px 0; }
+
+        /* Eerste Elftal Sectie */
+        .eerste-section {
+            background: #2a2a3e;
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .eerste-section h3 { color: #ff9800; text-align: center; margin-bottom: 15px; }
+        .btn-eerste {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .btn-open-tinder { background: #ff9800; color: white; font-weight: bold; }
+        .btn-lineup-action { background: #555; color: white; }
+        .btn-lineup-start { background: #28a745; color: white; font-weight: bold; }
+        .btn-lineup-stop { background: #dc3545; color: white; }
+
+        /* Tinder Overlay */
+        .tinder-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: #1a1a2e;
+            z-index: 5000;
+            flex-direction: column;
+            align-items: center;
+        }
+        .tinder-overlay.active { display: flex; }
+
+        .tinder-header {
+            width: 100%; padding: 15px;
+            text-align: center; background: #16213e;
+        }
+        .tinder-header h2 { margin: 0; font-size: 1.2em; }
+        .tinder-progress {
+            margin-top: 8px; font-size: 0.9em; color: #a0c4ff;
+        }
+        .progress-bar {
+            width: 80%; max-width: 300px; height: 6px;
+            background: #333; border-radius: 3px;
+            margin: 8px auto 0;
+        }
+        .progress-fill {
+            height: 100%; background: #e94560;
+            border-radius: 3px; transition: width 0.3s;
+        }
+
+        /* Card */
+        .tinder-card-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+        .tinder-card {
+            width: 80vw; max-width: 350px;
+            background: #16213e;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s, opacity 0.3s;
+            position: relative;
+            user-select: none;
+            touch-action: pan-y;
+        }
+        .tinder-card.swipe-left {
+            transform: translateX(-150%) rotate(-20deg);
+            opacity: 0;
+        }
+        .tinder-card.swipe-right {
+            transform: translateX(150%) rotate(20deg);
+            opacity: 0;
+        }
+        .tinder-card-img {
+            width: 100%; height: 45vh;
+            object-fit: cover; object-position: top;
+            background: #0f3460;
+        }
+        .tinder-card-info {
+            padding: 15px; text-align: center;
+        }
+        .tinder-card-nr {
+            font-size: 3em; font-weight: bold;
+            color: #e94560; line-height: 1;
+        }
+        .tinder-card-name {
+            font-size: 1.4em; margin-top: 5px;
+            color: #fff;
+        }
+
+        /* Swipe hint labels */
+        .swipe-label {
+            position: absolute; top: 20px;
+            padding: 8px 20px;
+            border: 4px solid;
+            border-radius: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            transform: rotate(-15deg);
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .swipe-label.nope {
+            right: 20px; color: #dc3545;
+            border-color: #dc3545;
+            transform: rotate(15deg);
+        }
+        .swipe-label.like {
+            left: 20px; color: #28a745;
+            border-color: #28a745;
+        }
+
+        /* Buttons */
+        .tinder-buttons {
+            display: flex; gap: 20px;
+            padding: 20px; justify-content: center;
+        }
+        .tinder-btn {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .tinder-btn-skip { background: #dc3545; color: white; }
+        .tinder-btn-select { background: #28a745; color: white; }
+        .tinder-btn-undo { background: #555; color: white; font-size: 1.4em; }
+
+        /* Summary */
+        .tinder-summary {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .tinder-summary.active { display: flex; }
+        .summary-title { font-size: 1.3em; margin-bottom: 15px; color: #28a745; }
+        .summary-list {
+            width: 100%; max-width: 400px;
+        }
+        .summary-player {
+            display: flex; align-items: center; gap: 12px;
+            background: #16213e; padding: 10px;
+            border-radius: 8px; margin-bottom: 8px;
+        }
+        .summary-player img {
+            width: 45px; height: 45px;
+            border-radius: 50%; object-fit: cover;
+        }
+        .summary-player .nr { font-weight: bold; color: #e94560; font-size: 1.2em; min-width: 30px; }
+        .summary-player .naam { flex: 1; }
+        .summary-player .remove-btn {
+            background: #dc3545; color: white;
+            border: none; border-radius: 5px;
+            padding: 5px 10px; cursor: pointer; font-size: 0.9em;
+        }
+        .summary-actions {
+            display: flex; gap: 10px; margin-top: 15px; width: 100%; max-width: 400px;
+        }
+        .summary-actions button {
+            flex: 1; padding: 15px; border: none;
+            border-radius: 8px; font-size: 1.1em;
+            cursor: pointer; font-weight: bold;
+        }
+        .btn-confirm { background: #28a745; color: white; }
+        .btn-retry { background: #555; color: white; }
+        .btn-close-tinder { background: #dc3545; color: white; }
+
+        /* Doelpunt sectie */
+        .goal-section { margin-top: 15px; }
+        .goal-section h4 { margin-bottom: 10px; }
+        .goal-list { max-height: 250px; overflow-y: auto; }
+        .goal-btn {
+            display: block; width: 100%;
+            padding: 12px; margin-bottom: 5px;
+            background: #2a4a2a; color: white;
+            border: 1px solid #4caf50;
+            border-radius: 5px; cursor: pointer;
+            font-size: 1em; text-align: left;
+        }
+
+        .balsponsor-toggle {
+            margin-top: 15px; text-align: center;
+            background: #555; padding: 10px; border-radius: 5px;
+        }
+        .balsponsor-toggle label {
+            font-size: 1.3em; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .balsponsor-toggle input { width: 25px; height: 25px; margin-right: 15px; }
+
+        /* Lineup controls compact */
+        .lineup-controls {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #2a2a3e;
+            border-radius: 8px;
+        }
+        .lineup-controls.active { display: block; }
+        .lineup-nav { display: flex; gap: 10px; margin-bottom: 10px; }
+        .lineup-nav button { flex: 1; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2 id="wedstrijdId" data-id="{{ wedstrijd.id }}" style="display: none;"></h2>
+        <div class="teams">
+            <strong>{{ wedstrijd.thuis }}</strong> vs <strong>{{ wedstrijd.uit }}</strong>
+        </div>
+
+        <div class="score-display">
+            <div class="team">
+                <div class="team-name">THUIS</div>
+                <div id="scoreThuis" class="score">{{ wedstrijd.scoreThuis }}</div>
+            </div>
+            <div style="font-size: 3em;">-</div>
+            <div class="team">
+                <div class="team-name">UIT</div>
+                <div id="scoreUit" class="score">{{ wedstrijd.scoreUit }}</div>
+            </div>
+        </div>
+
+        <div class="score-controls">
+            <button class="btn btn-plus" onclick="updateScore('thuis', 1)">+1 Thuis</button>
+            <button class="btn btn-plus" onclick="updateScore('uit', 1)">+1 Uit</button>
+            <button class="btn btn-min" onclick="updateScore('thuis', -1)">-1 Thuis</button>
+            <button class="btn btn-min" onclick="updateScore('uit', -1)">-1 Uit</button>
+        </div>
+
+        <div class="status-controls">
+            <h3>Wedstrijd Status</h3>
+            <div class="status-grid">
+                <button class="btn btn-status" onclick="updateStatus('Start 1e helft')">Start 1e Helft</button>
+                <button class="btn btn-status" onclick="updateStatus('Rust')">Rust</button>
+                <button class="btn btn-status" onclick="updateStatus('Start 2e helft')">Start 2e Helft</button>
+                <button class="btn btn-status" onclick="updateStatus('Einde Wedstrijd')">Eindsignaal</button>
+            </div>
+        </div>
+
+        <div id="huidigeStatus">{{ wedstrijd.status }}</div>
+
+        {% if is_eerste_elftal %}
+        <!-- Eerste Elftal Functies -->
+        <div class="eerste-section">
+            <h3>Eerste Elftal</h3>
+
+            <!-- Tinder Speler Selectie Knop -->
+            <button class="btn-eerste btn-open-tinder" onclick="openTinder()">
+                Opstelling Kiezen (Swipe)
+            </button>
+
+            <!-- Lineup Controls (verschijnen na selectie) -->
+            <div id="lineupControls" class="lineup-controls">
+                <button class="btn-eerste btn-lineup-start" onclick="startLineup()">Start Opstelling op Scherm</button>
+                <div class="lineup-nav">
+                    <button class="btn-eerste btn-lineup-action" onclick="lineupAction('prev')">Vorige</button>
+                    <button class="btn-eerste btn-lineup-action" onclick="lineupAction('next')">Volgende</button>
+                </div>
+                <button class="btn-eerste btn-lineup-stop" onclick="lineupAction('stop')">Stop Opstelling</button>
+            </div>
+
+            <!-- Doelpunten -->
+            <div class="goal-section">
+                <h4>Doelpuntenmaker (Thuis +1)</h4>
+                <div class="goal-list">
+                    {% for speler in spelers|sort(attribute='rugnummer') %}
+                    <button class="goal-btn" onclick="vierDoelpunt('{{ speler.id }}')">
+                        <strong>{{ speler.rugnummer }}</strong> - {{ speler.naam }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="balsponsor-toggle">
+                <label>
+                    <input type="checkbox" id="balsponsorToggle" onchange="toggleBalsponsors()" checked>
+                    Toon Balsponsoren
+                </label>
+            </div>
+        </div>
+        {% endif %}
+
+        <hr>
+        <button class="btn btn-min" style="width: 100%;" onclick="stopWedstrijd()">Stop Huidige Wedstrijd</button>
+    </div>
+
+    <!-- TINDER OVERLAY -->
+    <div class="tinder-overlay" id="tinderOverlay">
+        <div class="tinder-header">
+            <h2>Selecteer de Opstelling</h2>
+            <div class="tinder-progress">
+                <span id="tinderCount">0 / 0</span>
+                <div class="progress-bar"><div class="progress-fill" id="tinderProgressBar"></div></div>
+            </div>
+        </div>
+
+        <div class="tinder-card-area" id="tinderCardArea">
+            <div class="tinder-card" id="tinderCard">
+                <span class="swipe-label like" id="labelLike">ERIN</span>
+                <span class="swipe-label nope" id="labelNope">ERUIT</span>
+                <img class="tinder-card-img" id="tinderImg" src="" alt="">
+                <div class="tinder-card-info">
+                    <div class="tinder-card-nr" id="tinderNr"></div>
+                    <div class="tinder-card-name" id="tinderName"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tinder-buttons" id="tinderButtons">
+            <button class="tinder-btn tinder-btn-undo" onclick="tinderUndo()" title="Terug">&#8617;</button>
+            <button class="tinder-btn tinder-btn-skip" onclick="tinderSwipe('left')" title="Eruit">&#10007;</button>
+            <button class="tinder-btn tinder-btn-select" onclick="tinderSwipe('right')" title="Erin">&#10003;</button>
+        </div>
+
+        <!-- Samenvatting -->
+        <div class="tinder-summary" id="tinderSummary">
+            <div class="summary-title" id="summaryTitle">Geselecteerde Spelers</div>
+            <div class="summary-list" id="summaryList"></div>
+            <div class="summary-actions">
+                <button class="btn-retry" onclick="tinderReset()">Opnieuw</button>
+                <button class="btn-confirm" onclick="tinderConfirm()">Bevestig Opstelling</button>
+            </div>
+            <div class="summary-actions" style="margin-top: 5px;">
+                <button class="btn-close-tinder" onclick="closeTinder()">Annuleren</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const wedstrijdId = document.getElementById('wedstrijdId').dataset.id;
+
+        // --- Socket verbinding ---
+        document.addEventListener('DOMContentLoaded', () => {
+            socket.emit('client_wakker', { 'id': wedstrijdId });
+            {% if is_eerste_elftal %}
+            toggleBalsponsors();
+            {% endif %}
+        });
+
+        function updateScore(team, change) {
+            socket.emit('update_score', { 'id': wedstrijdId, 'team': team, 'change': change });
+        }
+
+        function updateStatus(newStatus) {
+            socket.emit('update_status', { 'id': wedstrijdId, 'status': newStatus });
+        }
+
+        function stopWedstrijd() {
+            if (confirm('Weet je zeker dat je deze wedstrijd wilt stoppen?')) {
+                socket.emit('stop_wedstrijd');
+                window.location.href = "/welcome";
+            }
+        }
+
+        function toggleBalsponsors() {
+            const isActive = document.getElementById('balsponsorToggle').checked;
+            socket.emit('toggle_balsponsors', { 'active': isActive });
+        }
+
+        function vierDoelpunt(spelerId) {
+            if (confirm("Doelpunt toekennen aan deze speler? (+1 Thuis)")) {
+                socket.emit('doelpunt_gevierd', { match_id: wedstrijdId, player_id: spelerId });
+            }
+        }
+
+        // --- Socket Listeners ---
+        socket.on('score_is_geupdate', function(data) {
+            if (data.id === wedstrijdId) {
+                document.getElementById('scoreThuis').innerText = data.scoreThuis;
+                document.getElementById('scoreUit').innerText = data.scoreUit;
+            }
+        });
+
+        socket.on('status_is_geupdate', function(data) {
+            if (data.id === wedstrijdId) {
+                document.getElementById('huidigeStatus').innerText = data.status;
+            }
+        });
+
+        // =============================================
+        //  TINDER-STYLE SPELER SELECTIE
+        // =============================================
+        const spelers = {{ spelers|tojson|default('[]') }};
+        spelers.sort((a, b) => a.rugnummer - b.rugnummer);
+
+        let tinderIndex = 0;
+        let selectedPlayers = [];
+        let decisions = []; // array of {player, selected: bool} for undo
+        let touchStartX = 0;
+        let touchDeltaX = 0;
+        let isDragging = false;
+
+        function openTinder() {
+            tinderIndex = 0;
+            selectedPlayers = [];
+            decisions = [];
+            document.getElementById('tinderOverlay').classList.add('active');
+            document.getElementById('tinderCardArea').style.display = 'flex';
+            document.getElementById('tinderButtons').style.display = 'flex';
+            document.getElementById('tinderSummary').classList.remove('active');
+            showCurrentCard();
+        }
+
+        function closeTinder() {
+            document.getElementById('tinderOverlay').classList.remove('active');
+        }
+
+        function showCurrentCard() {
+            if (tinderIndex >= spelers.length) {
+                showSummary();
+                return;
+            }
+
+            const p = spelers[tinderIndex];
+            const card = document.getElementById('tinderCard');
+            const img = document.getElementById('tinderImg');
+
+            // Reset card
+            card.className = 'tinder-card';
+            card.style.transform = '';
+            card.style.opacity = '';
+            document.getElementById('labelLike').style.opacity = 0;
+            document.getElementById('labelNope').style.opacity = 0;
+
+            // Set data
+            let imgSrc = p.foto_profiel || p.foto_actie || '';
+            if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+            if (imgSrc) {
+                img.src = imgSrc;
+                img.style.display = 'block';
+            } else {
+                img.style.display = 'none';
+            }
+
+            document.getElementById('tinderNr').innerText = '#' + p.rugnummer;
+            document.getElementById('tinderName').innerText = p.naam;
+
+            // Progress
+            document.getElementById('tinderCount').innerText = `${tinderIndex + 1} / ${spelers.length}`;
+            const pct = ((tinderIndex) / spelers.length) * 100;
+            document.getElementById('tinderProgressBar').style.width = pct + '%';
+        }
+
+        function tinderSwipe(direction) {
+            const card = document.getElementById('tinderCard');
+            const p = spelers[tinderIndex];
+
+            if (direction === 'right') {
+                card.classList.add('swipe-right');
+                selectedPlayers.push(p);
+                decisions.push({ player: p, selected: true });
+            } else {
+                card.classList.add('swipe-left');
+                decisions.push({ player: p, selected: false });
+            }
+
+            setTimeout(() => {
+                tinderIndex++;
+                showCurrentCard();
+            }, 300);
+        }
+
+        function tinderUndo() {
+            if (decisions.length === 0) return;
+
+            const last = decisions.pop();
+            tinderIndex--;
+
+            if (last.selected) {
+                selectedPlayers = selectedPlayers.filter(p => p.id !== last.player.id);
+            }
+
+            showCurrentCard();
+        }
+
+        function showSummary() {
+            document.getElementById('tinderCardArea').style.display = 'none';
+            document.getElementById('tinderButtons').style.display = 'none';
+            document.getElementById('tinderSummary').classList.add('active');
+            document.getElementById('tinderProgressBar').style.width = '100%';
+
+            document.getElementById('summaryTitle').innerText =
+                `Geselecteerd: ${selectedPlayers.length} spelers`;
+
+            const list = document.getElementById('summaryList');
+            list.innerHTML = '';
+
+            selectedPlayers.sort((a, b) => a.rugnummer - b.rugnummer);
+            selectedPlayers.forEach(p => {
+                let imgSrc = p.foto_profiel || '';
+                if (imgSrc && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+
+                const div = document.createElement('div');
+                div.className = 'summary-player';
+                div.innerHTML = `
+                    ${imgSrc ? `<img src="${imgSrc}" alt="">` : ''}
+                    <span class="nr">${p.rugnummer}</span>
+                    <span class="naam">${p.naam}</span>
+                    <button class="remove-btn" onclick="removeSummaryPlayer('${p.id}')">X</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function removeSummaryPlayer(id) {
+            selectedPlayers = selectedPlayers.filter(p => p.id !== id);
+            showSummary();
+        }
+
+        function tinderReset() {
+            tinderIndex = 0;
+            selectedPlayers = [];
+            decisions = [];
+            document.getElementById('tinderCardArea').style.display = 'flex';
+            document.getElementById('tinderButtons').style.display = 'flex';
+            document.getElementById('tinderSummary').classList.remove('active');
+            showCurrentCard();
+        }
+
+        function tinderConfirm() {
+            closeTinder();
+            // Toon de lineup controls
+            document.getElementById('lineupControls').classList.add('active');
+        }
+
+        // --- Lineup Controls ---
+        function startLineup() {
+            const ids = selectedPlayers.map(p => p.id);
+            socket.emit('lineup_control', { action: 'start', selected_ids: ids });
+        }
+
+        function lineupAction(act) {
+            socket.emit('lineup_control', { action: act });
+            if (act === 'stop') {
+                document.getElementById('lineupControls').classList.remove('active');
+            }
+        }
+
+        // --- TOUCH/SWIPE SUPPORT ---
+        const cardArea = document.getElementById('tinderCardArea');
+
+        cardArea.addEventListener('touchstart', (e) => {
+            if (tinderIndex >= spelers.length) return;
+            touchStartX = e.touches[0].clientX;
+            touchDeltaX = 0;
+            isDragging = true;
+        }, { passive: true });
+
+        cardArea.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            touchDeltaX = e.touches[0].clientX - touchStartX;
+
+            const card = document.getElementById('tinderCard');
+            const rotation = touchDeltaX * 0.1;
+            card.style.transform = `translateX(${touchDeltaX}px) rotate(${rotation}deg)`;
+
+            // Show labels
+            const threshold = 50;
+            document.getElementById('labelLike').style.opacity = touchDeltaX > threshold ? Math.min((touchDeltaX - threshold) / 80, 1) : 0;
+            document.getElementById('labelNope').style.opacity = touchDeltaX < -threshold ? Math.min((-touchDeltaX - threshold) / 80, 1) : 0;
+        }, { passive: true });
+
+        cardArea.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            const swipeThreshold = 100;
+            if (touchDeltaX > swipeThreshold) {
+                tinderSwipe('right');
+            } else if (touchDeltaX < -swipeThreshold) {
+                tinderSwipe('left');
+            } else {
+                // Snap back
+                const card = document.getElementById('tinderCard');
+                card.style.transform = '';
+                document.getElementById('labelLike').style.opacity = 0;
+                document.getElementById('labelNope').style.opacity = 0;
+            }
+        });
+    </script>
+</body>
+</html>

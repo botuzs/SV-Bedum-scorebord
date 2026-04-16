@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SV Bedum - Sponsor Beheer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; }
+
+        .header {
+            background: linear-gradient(135deg, #0f3460, #16213e);
+            padding: 20px; text-align: center;
+            border-bottom: 3px solid #e94560;
+        }
+        .header h1 { font-size: 1.5em; }
+        .header p { color: #a0c4ff; margin-top: 5px; font-size: 0.9em; }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+
+        /* Upload sectie */
+        .upload-section {
+            background: #16213e; border-radius: 10px;
+            padding: 20px; margin-bottom: 20px;
+        }
+        .upload-section h2 { font-size: 1.1em; margin-bottom: 15px; color: #e94560; }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #a0c4ff; font-size: 0.9em; }
+        .form-group input[type="text"] {
+            width: 100%; padding: 10px; background: #1a1a2e;
+            border: 1px solid #333; border-radius: 5px; color: white; font-size: 1em;
+        }
+        .file-input {
+            width: 100%; padding: 10px; background: #1a1a2e;
+            border: 2px dashed #333; border-radius: 5px;
+            color: #a0c4ff; cursor: pointer; text-align: center;
+        }
+        .file-input:hover { border-color: #e94560; }
+
+        /* Preview + Crop */
+        .crop-area {
+            display: none; margin: 15px 0;
+            background: #0d1117; border-radius: 8px; padding: 15px;
+            text-align: center;
+        }
+        .crop-area.active { display: block; }
+        .crop-area img { max-width: 100%; max-height: 400px; }
+        .crop-controls {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 8px; margin-top: 10px;
+        }
+        .crop-controls label { font-size: 0.8em; color: #888; }
+        .crop-controls input {
+            width: 100%; padding: 6px; background: #1a1a2e;
+            border: 1px solid #333; border-radius: 3px;
+            color: white; font-size: 0.9em;
+        }
+
+        .btn-upload {
+            width: 100%; padding: 14px; background: #e94560;
+            color: white; border: none; border-radius: 8px;
+            font-size: 1.1em; font-weight: bold; cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-upload:hover { background: #c81d4e; }
+        .btn-upload:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Sponsor lijst */
+        .sponsor-list h2 { font-size: 1.1em; margin-bottom: 15px; color: #e94560; }
+
+        .sponsor-card {
+            display: flex; align-items: center; gap: 15px;
+            background: #16213e; border-radius: 8px;
+            padding: 12px; margin-bottom: 10px;
+            border-left: 4px solid #333;
+        }
+        .sponsor-card.actief { border-left-color: #28a745; }
+
+        .sponsor-card img {
+            height: 50px; width: auto; max-width: 120px;
+            object-fit: contain; background: #fff;
+            border-radius: 4px; padding: 4px;
+        }
+        .sponsor-info { flex: 1; }
+        .sponsor-info .naam { font-weight: bold; }
+        .sponsor-info .status { font-size: 0.8em; color: #888; margin-top: 3px; }
+        .sponsor-info .status.actief { color: #28a745; }
+
+        .sponsor-actions { display: flex; gap: 8px; }
+        .btn-toggle, .btn-delete {
+            padding: 8px 14px; border: none; border-radius: 5px;
+            cursor: pointer; font-size: 0.85em; font-weight: bold;
+        }
+        .btn-toggle { background: #28a745; color: white; }
+        .sponsor-card.actief .btn-toggle { background: #ffc107; color: #333; }
+        .btn-delete { background: #dc3545; color: white; }
+
+        .empty { text-align: center; color: #555; padding: 30px; }
+
+        .api-info {
+            background: #0d1117; border-radius: 8px; padding: 15px;
+            margin-top: 20px; font-size: 0.85em; color: #888;
+        }
+        .api-info code { color: #e94560; background: #1a1a2e; padding: 2px 6px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Sponsor Beheer</h1>
+        <p>Upload en beheer sponsorlogo's voor het scorebord</p>
+    </div>
+
+    <div class="container">
+        <!-- Upload -->
+        <div class="upload-section">
+            <h2>Nieuw Sponsorlogo Uploaden</h2>
+            <form method="POST" action="/upload" enctype="multipart/form-data" id="uploadForm">
+                <div class="form-group">
+                    <label>Naam sponsor</label>
+                    <input type="text" name="naam" placeholder="Bijv. Pearle Opticiens" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Logo (alleen PNG)</label>
+                    <input type="file" name="file" accept=".png" class="file-input"
+                           id="fileInput" onchange="previewImage(this)">
+                </div>
+
+                <!-- Crop preview -->
+                <div class="crop-area" id="cropArea">
+                    <p style="color: #a0c4ff; margin-bottom: 10px;">Pas het bijsnijdgebied aan (optioneel):</p>
+                    <canvas id="cropCanvas" style="max-width:100%; border: 1px solid #333; cursor: crosshair;"></canvas>
+                    <div class="crop-controls">
+                        <div><label>X</label><input type="number" name="crop_x" id="cropX" value="0"></div>
+                        <div><label>Y</label><input type="number" name="crop_y" id="cropY" value="0"></div>
+                        <div><label>Breedte</label><input type="number" name="crop_w" id="cropW" value="0"></div>
+                        <div><label>Hoogte</label><input type="number" name="crop_h" id="cropH" value="0"></div>
+                    </div>
+                    <p style="color: #555; font-size: 0.8em; margin-top: 8px;">
+                        Klik en sleep op de afbeelding om bij te snijden. Laat op 0 voor het volledige beeld.
+                    </p>
+                </div>
+
+                <button type="submit" class="btn-upload" id="uploadBtn" disabled>Upload & Verwerk</button>
+            </form>
+        </div>
+
+        <!-- Sponsor Lijst -->
+        <div class="sponsor-list">
+            <h2>Sponsoren ({{ sponsors|length }})</h2>
+
+            {% for s in sponsors %}
+            <div class="sponsor-card {{ 'actief' if s.actief }}">
+                <img src="/api/image/{{ s.filename }}" alt="{{ s.naam }}">
+                <div class="sponsor-info">
+                    <div class="naam">{{ s.naam }}</div>
+                    <div class="status {{ 'actief' if s.actief }}">
+                        {{ 'Actief - wordt getoond op scorebord' if s.actief else 'Inactief' }}
+                    </div>
+                </div>
+                <div class="sponsor-actions">
+                    <a href="/toggle/{{ s.filename }}" class="btn-toggle">
+                        {{ 'Uit' if s.actief else 'Aan' }}
+                    </a>
+                    <a href="/delete/{{ s.filename }}" class="btn-delete"
+                       onclick="return confirm('Weet je zeker dat je deze sponsor wilt verwijderen?')">X</a>
+                </div>
+            </div>
+            {% endfor %}
+
+            {% if not sponsors %}
+            <div class="empty">Nog geen sponsoren geupload.</div>
+            {% endif %}
+        </div>
+
+        <div class="api-info">
+            <strong>API voor het scorebord:</strong><br>
+            Actieve sponsoren ophalen: <code>GET http://&lt;dit-ip&gt;:4000/api/sponsors</code><br>
+            Stel dit adres in op de admin-pagina van het scorebord.
+        </div>
+    </div>
+
+    <script>
+        let cropImg = null;
+        let drawing = false;
+        let startX = 0, startY = 0;
+
+        function previewImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            document.getElementById('uploadBtn').disabled = false;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const area = document.getElementById('cropArea');
+                area.classList.add('active');
+
+                cropImg = new Image();
+                cropImg.onload = function() {
+                    const canvas = document.getElementById('cropCanvas');
+                    // Schaal canvas zodat het past
+                    const maxW = area.clientWidth - 30;
+                    const scale = Math.min(maxW / cropImg.width, 400 / cropImg.height, 1);
+                    canvas.width = cropImg.width * scale;
+                    canvas.height = cropImg.height * scale;
+                    canvas.dataset.scale = scale;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(cropImg, 0, 0, canvas.width, canvas.height);
+
+                    // Zet default crop op hele afbeelding
+                    document.getElementById('cropW').value = Math.round(cropImg.width);
+                    document.getElementById('cropH').value = Math.round(cropImg.height);
+                    document.getElementById('cropX').value = 0;
+                    document.getElementById('cropY').value = 0;
+                };
+                cropImg.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Crop via klikken en slepen op canvas
+        const canvas = document.getElementById('cropCanvas');
+
+        canvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!drawing || !cropImg) return;
+            const rect = canvas.getBoundingClientRect();
+            const curX = e.clientX - rect.left;
+            const curY = e.clientY - rect.top;
+
+            // Herteken
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(cropImg, 0, 0, canvas.width, canvas.height);
+
+            // Teken selectie rechthoek
+            ctx.strokeStyle = '#e94560';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(startX, startY, curX - startX, curY - startY);
+            ctx.setLineDash([]);
+
+            // Donker buiten selectie
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(0, 0, canvas.width, Math.min(startY, curY));
+            ctx.fillRect(0, Math.max(startY, curY), canvas.width, canvas.height - Math.max(startY, curY));
+            ctx.fillRect(0, Math.min(startY, curY), Math.min(startX, curX), Math.abs(curY - startY));
+            ctx.fillRect(Math.max(startX, curX), Math.min(startY, curY), canvas.width - Math.max(startX, curX), Math.abs(curY - startY));
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!drawing || !cropImg) return;
+            drawing = false;
+            const rect = canvas.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            const endY = e.clientY - rect.top;
+            const scale = parseFloat(canvas.dataset.scale) || 1;
+
+            // Bereken echte pixel-coordinaten
+            const x = Math.round(Math.min(startX, endX) / scale);
+            const y = Math.round(Math.min(startY, endY) / scale);
+            const w = Math.round(Math.abs(endX - startX) / scale);
+            const h = Math.round(Math.abs(endY - startY) / scale);
+
+            if (w > 10 && h > 10) {
+                document.getElementById('cropX').value = x;
+                document.getElementById('cropY').value = y;
+                document.getElementById('cropW').value = w;
+                document.getElementById('cropH').value = h;
+            }
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const t = e.touches[0];
+            canvas.dispatchEvent(new MouseEvent('mousedown', {clientX: t.clientX, clientY: t.clientY}));
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const t = e.touches[0];
+            canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: t.clientX, clientY: t.clientY}));
+        });
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            canvas.dispatchEvent(new MouseEvent('mouseup', {clientX: startX, clientY: startY}));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wedstrijd Instellen</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #1a1a2e; color: white; min-height: 100vh; }
+
+        .header {
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .header h1 { font-size: 1.3em; margin-bottom: 5px; }
+        .header .match-info { color: #a0c4ff; font-size: 1.1em; }
+
+        .section {
+            padding: 15px;
+            margin: 15px;
+            background: #16213e;
+            border-radius: 10px;
+        }
+        .section h2 { font-size: 1.1em; margin-bottom: 12px; color: #e2e2e2; }
+
+        /* Zoekbalk */
+        .search-bar {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: white;
+            font-size: 1em;
+            margin-bottom: 12px;
+        }
+        .search-bar::placeholder { color: #666; }
+        .search-bar:focus { outline: none; border-color: #e94560; }
+
+        /* Logo Grid */
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-height: 50vh;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        .logo-item {
+            background: #1a1a2e;
+            border: 3px solid transparent;
+            border-radius: 10px;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .logo-item:hover { border-color: #555; }
+        .logo-item.selected { border-color: #e94560; background: #2a1a3e; }
+        .logo-item img {
+            width: 100%;
+            height: 70px;
+            object-fit: contain;
+        }
+        .logo-item .logo-name {
+            font-size: 0.65em;
+            color: #aaa;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .logo-item.no-results {
+            grid-column: 1 / -1;
+            border: none;
+            color: #666;
+            padding: 20px;
+        }
+
+        /* Duur keuze */
+        .duur-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .duur-btn {
+            padding: 15px 10px;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .duur-btn:hover { border-color: #555; }
+        .duur-btn.selected { border-color: #e94560; background: #2a1a3e; }
+        .duur-btn .label { font-size: 0.8em; color: #aaa; }
+
+        /* Start knop */
+        .start-btn {
+            display: block;
+            width: calc(100% - 30px);
+            margin: 15px;
+            padding: 18px;
+            background: linear-gradient(135deg, #e94560, #c81d4e);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.3em;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+        .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Wedstrijd Instellen</h1>
+        <div class="match-info">{{ wedstrijd.thuis }} vs {{ wedstrijd.uit }}</div>
+    </div>
+
+    <form method="POST" id="setupForm">
+        <!-- Logo Selectie -->
+        <div class="section">
+            <h2>Kies het logo van de tegenstander</h2>
+            <input type="text" class="search-bar" id="logoSearch" placeholder="Zoek logo..." oninput="filterLogos()">
+            <input type="hidden" name="uit_logo" id="uitLogoInput" value="">
+
+            <div class="logo-grid" id="logoGrid">
+                {% for logo in logos %}
+                <div class="logo-item" data-logo="{{ logo }}" onclick="selectLogo(this, '{{ logo }}')">
+                    <img src="/static/clublogos/{{ logo }}" alt="{{ logo }}" loading="lazy">
+                    <div class="logo-name">{{ logo.replace('.png','').replace('.jpg','').replace('.jpeg','').replace('_',' ') }}</div>
+                </div>
+                {% endfor %}
+                {% if not logos %}
+                <div class="logo-item no-results">Geen logo's beschikbaar</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Duur Selectie -->
+        <div class="section">
+            <h2>Speeltijd per helft</h2>
+            <input type="hidden" name="duur_per_helft" id="duurInput" value="45">
+            <div class="duur-options">
+                <div class="duur-btn" onclick="selectDuur(this, 25)">25 min<div class="label">Pupillen</div></div>
+                <div class="duur-btn" onclick="selectDuur(this, 30)">30 min<div class="label">Junioren</div></div>
+                <div class="duur-btn" onclick="selectDuur(this, 35)">35 min<div class="label">JO17+</div></div>
+                <div class="duur-btn" onclick="selectDuur(this, 40)">40 min<div class="label">Senioren</div></div>
+                <div class="duur-btn selected" onclick="selectDuur(this, 45)">45 min<div class="label">Standaard</div></div>
+                <div class="duur-btn" onclick="selectDuur(this, 50)">50 min<div class="label">Beker</div></div>
+            </div>
+        </div>
+
+        <button type="submit" class="start-btn">Start Wedstrijd &#9889;</button>
+    </form>
+
+    <script>
+        function selectLogo(el, filename) {
+            document.querySelectorAll('.logo-item').forEach(i => i.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('uitLogoInput').value = filename;
+        }
+
+        function selectDuur(el, minuten) {
+            document.querySelectorAll('.duur-btn').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('duurInput').value = minuten;
+        }
+
+        function filterLogos() {
+            const zoek = document.getElementById('logoSearch').value.toLowerCase();
+            const items = document.querySelectorAll('.logo-item[data-logo]');
+            let zichtbaar = 0;
+            items.forEach(item => {
+                const naam = item.dataset.logo.toLowerCase();
+                const match = naam.includes(zoek);
+                item.style.display = match ? '' : 'none';
+                if (match) zichtbaar++;
+            });
+        }
+
+        // Pre-select logo if already set
+        {% if wedstrijd.uit_logo_lokaal %}
+        const huidigLogo = "{{ wedstrijd.uit_logo_lokaal }}".replace("clublogos/", "");
+        const bestaand = document.querySelector(`.logo-item[data-logo="${huidigLogo}"]`);
+        if (bestaand) {
+            bestaand.classList.add('selected');
+            document.getElementById('uitLogoInput').value = huidigLogo;
+        }
+        {% endif %}
+    </script>
+</body>
+</html>
