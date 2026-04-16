@@ -37,10 +37,6 @@
         <a href="/admin/sponsors" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold;">
             Beheer Sponsoren &gt;
         </a>
-
-        <a href="/admin/matches" style="display: block; text-align: right; font-size: 1.1em; font-weight: bold; margin-top: 5px;">
-            Beheer Wedstrijden &gt;
-        </a>
         
         <h2>Venster Positie & Grootte (Live)</h2>
         <div id="window-settings">
@@ -309,6 +305,15 @@
                 </div>
             </div>
 
+            <div class="theme-grid" style="margin-top: 20px; background: #fffde7; padding: 10px; border-radius: 5px; border: 1px solid #fff59d;">
+                <label>Juichfoto Duur (sec)</label>
+                <div class="setting">
+                    <input type="number" id="juichfoto_duur" class="theme-input" data-type="number" 
+                           value="{{ theme_data.juichfoto_duur|default(10) }}" min="1" max="60">
+                </div>
+                <span>Tijd dat de speler in beeld blijft na doelpunt</span>
+            </div>
+
             
             <hr style="grid-column: 1 / -1; margin: 15px 0;">
             <h3>Top Sponsor (Boven Timer)</h3>
@@ -343,6 +348,86 @@
 
         </div>
         
+        <hr style="margin: 30px 0;">
+
+        <h2>Live Tekst Overlay</h2>
+        <div class="card" style="background: #e3f2fd; padding: 20px; border-radius: 8px; border: 1px solid #bbdefb;">
+            <div class="grid">
+                <div class="setting" style="grid-column: 1 / -1;">
+                    <label>Bericht</label>
+                    <textarea id="overlayText" rows="2" placeholder="Typ hier de tekst..." style="width: 100%; padding: 10px; font-size: 1.1em; border-radius: 5px; border: 1px solid #90caf9; margin-top: 5px; box-sizing: border-box;"></textarea>
+                </div>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <label style="font-size: 0.9em; font-weight: bold; color: #555;">Sneltoetsen (Templates):</label>
+                <div id="template-container" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;">
+                    {% for temp in theme_data.tekst_templates %}
+                    <div style="display: flex; align-items: center; background: #fff; border: 1px solid #90caf9; border-radius: 5px; padding: 2px 8px;">
+                        <span onclick="applyTemplate('{{ temp.text|e }}')" style="cursor: pointer; font-size: 0.9em;">{{ temp.label }}</span>
+                        <span onclick="removeTemplate('{{ temp.id }}')" style="margin-left: 8px; color: #dc3545; cursor: pointer; font-weight: bold;">×</span>
+                    </div>
+                    {% endfor %}
+                    <button onclick="addTemplatePrompt()" style="background: #28a745; color: white; border: none; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em;">+ Nieuw</button>
+                </div>
+            </div>
+
+            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #bbdefb;">
+            
+            <div class="grid" style="margin-top: 15px;">
+                <div class="setting">
+                    <label>Modus</label>
+                    <select id="overlayMode" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #90caf9;">
+                        <option value="marquee">Lichtkrant (Witte balk onder logo's)</option>
+                        <option value="overlay">Fullscreen (Zwarte overlay over alles)</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label>Duur (seconden)</label>
+                    <input type="number" id="overlayDuration" value="15" min="1" max="3600" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #90caf9; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div class="grid" style="margin-top: 20px;">
+                <button onclick="sendText(true)" style="background: #007bff; color: white; border: none; padding: 12px; font-weight: bold; border-radius: 5px; cursor: pointer;">Toon op Scherm</button>
+                <button onclick="sendText(false)" style="background: #6c757d; color: white; border: none; padding: 12px; font-weight: bold; border-radius: 5px; cursor: pointer;">Verberg</button>
+            </div>
+
+            <h3 style="margin-top: 25px; font-size: 1.1em;">Styling Lichtkrant (Marquee)</h3>
+            <div class="theme-grid">
+                <label>Achtergrond Kleur</label>
+                <input type="color" id="tekst_marquee_bg" class="theme-input" value="{{ theme_data.tekst_marquee_bg }}">
+                <span></span>
+            </div>
+            <div class="theme-grid">
+                <label>Tekst Kleur</label>
+                <input type="color" id="tekst_marquee_color" class="theme-input" value="{{ theme_data.tekst_marquee_color }}">
+                <span></span>
+            </div>
+            <div class="grid">
+                <div class="setting">
+                    <label>Grootte Balk (vh)</label>
+                    <input type="range" id="tekst_marquee_height" class="theme-input" data-type="number" min="2" max="25" value="{{ theme_data.tekst_marquee_height }}">
+                    <span class="value-display">{{ theme_data.tekst_marquee_height }} vh</span>
+                </div>
+                <div class="setting">
+                    <label>Tekst Grootte (vw)</label>
+                    <input type="range" id="tekst_marquee_size" class="theme-input" data-type="number" min="1" max="10" step="0.1" value="{{ theme_data.tekst_marquee_size }}">
+                    <span class="value-display">{{ theme_data.tekst_marquee_size }} vw</span>
+                </div>
+            </div>
+            <div class="setting">
+                <label>Lettertype (Font Family)</label>
+                <select id="tekst_marquee_font" class="theme-input" style="width: 100%; padding: 8px;">
+                    <option value="Arial" {% if theme_data.tekst_marquee_font == 'Arial' %}selected{% endif %}>Arial</option>
+                    <option value="'Helvetica Neue', Helvetica" {% if theme_data.tekst_marquee_font == "'Helvetica Neue', Helvetica" %}selected{% endif %}>Helvetica</option>
+                    <option value="'Courier New', Courier" {% if theme_data.tekst_marquee_font == "'Courier New', Courier" %}selected{% endif %}>Courier (Monospace)</option>
+                    <option value="Georgia, serif" {% if theme_data.tekst_marquee_font == "Georgia, serif" %}selected{% endif %}>Georgia (Serif)</option>
+                    <option value="Impact, Charcoal" {% if theme_data.tekst_marquee_font == "Impact, Charcoal" %}selected{% endif %}>Impact</option>
+                </select>
+            </div>
+        </div>
+
         <hr style="margin: 30px 0;">
         
         <h2>Applicatie Herstarten</h2>
@@ -487,6 +572,71 @@
                     result.style.color = '#dc3545';
                 });
         }
+
+        function sendText(show) {
+            if (!show) {
+                socket.emit('hide_text');
+                return;
+            }
+            const text = document.getElementById('overlayText').value.trim();
+            if (!text) return;
+            
+            socket.emit('show_text', {
+                text: text,
+                mode: document.getElementById('overlayMode').value,
+                duration: document.getElementById('overlayDuration').value
+            });
+        }
+
+        // --- Template Functies ---
+        function applyTemplate(txt) {
+            document.getElementById('overlayText').value = txt;
+        }
+
+        function addTemplatePrompt() {
+            const label = prompt("Naam voor de template (bijv. 'Pauze'):");
+            if (!label) return;
+            const text = prompt("De tekst die getoond moet worden:");
+            if (!text) return;
+
+            const id = Date.now().toString();
+            const currentTemplates = {{ theme_data.tekst_templates|tojson|safe }};
+            currentTemplates.push({id, label, text});
+            
+            saveTemplates(currentTemplates);
+        }
+
+        function removeTemplate(id) {
+            if (!confirm("Template verwijderen?")) return;
+            const currentTemplates = {{ theme_data.tekst_templates|tojson|safe }};
+            const updated = currentTemplates.filter(t => t.id !== id);
+            saveTemplates(updated);
+        }
+
+        function saveTemplates(list) {
+            // We sturen een thema update met de nieuwe lijst
+            const themeData = {};
+            document.querySelectorAll('.theme-input').forEach(input => {
+                themeData[input.id] = (input.dataset.type === 'number') ? parseFloat(input.value) : input.value;
+            });
+            themeData['tekst_templates'] = list;
+            socket.emit('admin_update_theme', themeData);
+            
+            // Pagina herladen om de knoppen te vernieuwen (simpelste weg)
+            setTimeout(() => location.reload(), 500);
+        }
+
+        // Voeg de nieuwe lichtkrant sliders toe aan de live update lijst
+        const extraLiveSliders = ['tekst_marquee_height', 'tekst_marquee_size'];
+        extraLiveSliders.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('input', () => {
+                    if(el.nextElementSibling) el.nextElementSibling.innerText = el.value + (id.includes('height') ? ' vh' : ' vw');
+                    sendThemeUpdate();
+                });
+            }
+        });
     </script>
 </body>
 </html>

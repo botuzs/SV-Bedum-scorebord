@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sponsoren</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; }
+        h1, h2 { color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .box { background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee; margin-bottom: 20px; }
+        .sponsor-list { list-style: none; padding: 0; }
+        .sponsor-list li {
+            display: flex; align-items: center;
+            padding: 10px; border-bottom: 1px solid #ddd;
+        }
+        .sponsor-list img { height: 50px; width: auto; margin-right: 15px; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p><a href="/admin">&lt; Terug naar Hoofd Admin</a></p>
+        <h1>Sponsor Beheer</h1>
+
+        <div class="box" style="background:#fff3cd; border-color:#ffc107;">
+            <h2 style="color:#856404;">Synchroniseer van Master</h2>
+            <p>Haalt alle sponsor afbeeldingen op van het ingestelde master IP. De huidige lokale sponsors worden verwijderd.</p>
+            <button onclick="syncSponsorsMaster()" style="background:#856404;">Sync sponsors van master</button>
+            <span id="syncResult" style="margin-left:15px; font-size:0.9em;"></span>
+        </div>
+
+        <div class="box">
+            <h2>Lokaal Uploaden</h2>
+            <p>Upload een sponsor afbeelding rechtstreeks op dit apparaat.</p>
+            <form action="/admin/upload-sponsor" method="POST" enctype="multipart/form-data">
+                <input type="file" name="sponsor_file" accept="image/png, image/jpeg" required>
+                <button type="submit">Upload</button>
+            </form>
+        </div>
+
+        <div class="box">
+            <h2>Huidige Sponsoren</h2>
+            <p>Dit zijn alle afbeeldingen die momenteel in de sponsors map staan. Ze worden allemaal getoond op het scorebord.</p>
+            <ul class="sponsor-list">
+                {% for file in all_sponsor_files %}
+                <li>
+                    <img src="{{ url_for('static', filename='sponsors/' + file) }}">
+                    {{ file }}
+                </li>
+                {% else %}
+                <li>Geen bestanden aanwezig. Sync van master of upload handmatig.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function syncSponsorsMaster() {
+            const result = document.getElementById('syncResult');
+            result.innerText = 'Bezig...';
+            result.style.color = '#888';
+
+            fetch('/admin/sync-sponsors', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok) {
+                        result.innerText = `Klaar! ${data.count} sponsor(en) opgehaald. Pagina herladen...`;
+                        result.style.color = '#28a745';
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        result.innerText = `Fout: ${data.error}`;
+                        result.style.color = '#dc3545';
+                    }
+                })
+                .catch(() => {
+                    result.innerText = 'Verbindingsfout';
+                    result.style.color = '#dc3545';
+                });
+        }
+    </script>
+</body>
+</html>

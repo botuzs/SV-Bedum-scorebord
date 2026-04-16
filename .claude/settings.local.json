@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(where pyinstaller:*)",
+      "Bash(\"/c/Users/sander/AppData/Local/Programs/Python/Python312/python.exe\" -m pip show pyinstaller)",
+      "Bash(\"/c/Users/sander/AppData/Local/Programs/Python/Python312/python.exe\" -m PyInstaller SVBedumScorebord.spec --noconfirm)",
+      "Bash(gh auth:*)"
+    ]
+  }
+}

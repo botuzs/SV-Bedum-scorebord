@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Wedstrijden</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { color: #003366; }
+        a { color: #007bff; text-decoration: none; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; }
+        .btn-delete { background-color: #dc3545; padding: 5px 10px; }
+        .btn-edit { background-color: #007bff; padding: 5px 10px; }
+        .scraper-box { background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #90caf9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #ddd; }
+        .logo-preview { height: 30px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p><a href="/admin">&lt; Terug naar Hoofd Admin</a></p>
+        <h1>Wedstrijd Beheer</h1>
+
+        <div class="scraper-box">
+            <h2>Scraper Draaien</h2>
+            <form action="/admin/run-scraper" method="POST" style="display: flex; gap: 10px; align-items: center;">
+                <label>Timeout (sec):</label>
+                <input type="number" name="timeout" value="{{ scraper_timeout }}" style="width: 80px;">
+                <button type="submit" style="background-color: #007bff;">Start Scraper</button>
+            </form>
+            <p><small>Let op: Dit kan even duren. De pagina herlaadt niet automatisch, check de terminal of ververs over 20 sec.</small></p>
+        </div>
+
+        <div style="background: #eee; padding: 15px; border-radius: 5px;">
+            <h2>{% if edit_match %}Wedstrijd Bewerken{% else %}Nieuwe Wedstrijd{% endif %}</h2>
+            <form action="/admin/save-match" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="match_id" value="{{ edit_match.id if edit_match else '' }}">
+                
+                <div class="form-group">
+                    <label>Datum & Tijd</label>
+                    <input type="text" name="tijd" value="{{ edit_match.tijd if edit_match else '' }}" required placeholder="bv: 22-11-2025 14:00">
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h3>Thuis Team</h3>
+                        <div class="form-group">
+                            <label>Naam</label>
+                            <input type="text" name="thuis" value="{{ edit_match.thuis if edit_match else 'SV Bedum' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Logo (Optioneel - overschrijft standaard)</label>
+                            <input type="file" name="thuis_logo">
+                            {% if edit_match and edit_match.thuis_logo_lokaal %}
+                                <br><img src="{{ url_for('static', filename=edit_match.thuis_logo_lokaal) }}" class="logo-preview">
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3>Uit Team</h3>
+                        <div class="form-group">
+                            <label>Naam</label>
+                            <input type="text" name="uit" value="{{ edit_match.uit if edit_match else '' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Logo</label>
+                            <input type="file" name="uit_logo">
+                            {% if edit_match and edit_match.uit_logo_lokaal %}
+                                <br><img src="{{ url_for('static', filename=edit_match.uit_logo_lokaal) }}" class="logo-preview">
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit">{% if edit_match %}Opslaan{% else %}Toevoegen{% endif %}</button>
+                {% if edit_match %} <a href="/admin/matches" style="margin-left: 10px;">Annuleren</a> {% endif %}
+            </form>
+        </div>
+
+        <h2>Bestaande Wedstrijden</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tijd</th>
+                    <th>Thuis</th>
+                    <th>Uit</th>
+                    <th>Acties</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in wedstrijden %}
+                <tr>
+                    <td>{{ match.tijd }}</td>
+                    <td>
+                        {% if match.thuis_logo_lokaal %}
+                            <img src="{{ url_for('static', filename=match.thuis_logo_lokaal) }}" class="logo-preview">
+                        {% endif %}
+                        {{ match.thuis }}
+                    </td>
+                    <td>
+                        {% if match.uit_logo_lokaal %}
+                            <img src="{{ url_for('static', filename=match.uit_logo_lokaal) }}" class="logo-preview">
+                        {% endif %}
+                        {{ match.uit }}
+                    </td>
+                    <td>
+                        <a href="/admin/matches?edit={{ match.id }}" class="btn-edit" style="color:white;">Bewerk</a>
+                        <a href="/admin/delete-match?id={{ match.id }}" class="btn-delete" style="color:white;" onclick="return confirm('Zeker weten?')">Verwijder</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

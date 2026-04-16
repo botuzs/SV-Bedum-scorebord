@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spelers selecteren</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; min-height: 100vh; overflow-x: hidden; }
+
+        .header {
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .header h1 { font-size: 1.2em; margin-bottom: 4px; }
+        .header .match-info { color: #a0c4ff; font-size: 0.95em; }
+        .progress {
+            margin-top: 8px; font-size: 0.9em; color: #a0c4ff;
+        }
+        .progress-bar { width: 80%; max-width: 300px; height: 6px; background: #333; border-radius: 3px; margin: 8px auto 0; }
+        .progress-fill { height: 100%; background: #e94560; border-radius: 3px; transition: width 0.3s; }
+
+        .card-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+            min-height: 60vh;
+            position: relative;
+        }
+        .card {
+            width: 80vw; max-width: 350px;
+            background: #16213e;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s, opacity 0.3s;
+            position: relative;
+            user-select: none;
+            touch-action: pan-y;
+        }
+        .card.swipe-left { transform: translateX(-150%) rotate(-20deg); opacity: 0; }
+        .card.swipe-right { transform: translateX(150%) rotate(20deg); opacity: 0; }
+        .card-img {
+            width: 100%; height: 50vh;
+            object-fit: cover; object-position: top;
+            background: #0f3460;
+        }
+        .card-info { padding: 15px; text-align: center; }
+        .card-nr { font-size: 3em; font-weight: bold; color: #e94560; line-height: 1; }
+        .card-name { font-size: 1.4em; margin-top: 5px; }
+
+        .swipe-label {
+            position: absolute; top: 20px;
+            padding: 8px 20px;
+            border: 4px solid;
+            border-radius: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .swipe-label.nope { right: 20px; color: #dc3545; border-color: #dc3545; transform: rotate(15deg); }
+        .swipe-label.like { left: 20px; color: #28a745; border-color: #28a745; transform: rotate(-15deg); }
+
+        .buttons { display: flex; gap: 20px; padding: 20px; justify-content: center; }
+        .btn-round {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .btn-skip { background: #dc3545; color: white; }
+        .btn-select { background: #28a745; color: white; }
+        .btn-undo { background: #555; color: white; font-size: 1.4em; }
+
+        .summary {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 20px;
+        }
+        .summary.active { display: flex; }
+        .summary-title { font-size: 1.3em; margin-bottom: 15px; color: #28a745; }
+        .summary-list { width: 100%; max-width: 400px; }
+        .summary-player {
+            display: flex; align-items: center; gap: 12px;
+            background: #16213e; padding: 10px;
+            border-radius: 8px; margin-bottom: 8px;
+        }
+        .summary-player img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; }
+        .summary-player .nr { font-weight: bold; color: #e94560; font-size: 1.2em; min-width: 30px; }
+        .summary-player .naam { flex: 1; }
+        .summary-player .remove-btn {
+            background: #dc3545; color: white;
+            border: none; border-radius: 5px;
+            padding: 5px 10px; cursor: pointer; font-size: 0.9em;
+        }
+        .summary-actions { display: flex; gap: 10px; margin-top: 15px; width: 100%; max-width: 400px; }
+        .summary-actions button {
+            flex: 1; padding: 15px; border: none;
+            border-radius: 8px; font-size: 1.05em;
+            cursor: pointer; font-weight: bold;
+        }
+        .btn-confirm { background: #28a745; color: white; }
+        .btn-retry { background: #555; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Selecteer de spelers</h1>
+        <div class="match-info">{{ wedstrijd.thuis }} vs {{ wedstrijd.uit }}</div>
+        <div class="progress">
+            <span id="count">0 / 0</span>
+            <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+        </div>
+    </div>
+
+    <div class="card-area" id="cardArea">
+        <div class="card" id="card">
+            <span class="swipe-label like" id="labelLike">ERIN</span>
+            <span class="swipe-label nope" id="labelNope">ERUIT</span>
+            <img class="card-img" id="cardImg" src="" alt="">
+            <div class="card-info">
+                <div class="card-nr" id="cardNr"></div>
+                <div class="card-name" id="cardName"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="buttons" id="buttons">
+        <button class="btn-round btn-undo" onclick="undo()" title="Terug">&#8617;</button>
+        <button class="btn-round btn-skip" onclick="swipe('left')" title="Eruit">&#10007;</button>
+        <button class="btn-round btn-select" onclick="swipe('right')" title="Erin">&#10003;</button>
+    </div>
+
+    <div class="summary" id="summary">
+        <div class="summary-title" id="summaryTitle">Geselecteerde spelers</div>
+        <div class="summary-list" id="summaryList"></div>
+        <div class="summary-actions">
+            <button class="btn-retry" onclick="reset()">Opnieuw</button>
+            <button class="btn-confirm" onclick="confirmSelection()">Bevestig en ga verder</button>
+        </div>
+    </div>
+
+    <script>
+        const wedstrijdId = "{{ wedstrijd.id }}";
+        const spelers = {{ spelers|tojson|default('[]') }};
+        spelers.sort((a, b) => a.rugnummer - b.rugnummer);
+
+        let index = 0;
+        let selected = [];
+        let history = [];
+        let touchStartX = 0;
+        let touchDeltaX = 0;
+        let dragging = false;
+
+        function show() {
+            if (index >= spelers.length) return showSummary();
+
+            const p = spelers[index];
+            const card = document.getElementById('card');
+            const img = document.getElementById('cardImg');
+            card.className = 'card';
+            card.style.transform = '';
+            card.style.opacity = '';
+            document.getElementById('labelLike').style.opacity = 0;
+            document.getElementById('labelNope').style.opacity = 0;
+
+            let imgSrc = p.foto_profiel || p.foto_actie || '';
+            if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+            img.src = imgSrc || '';
+            img.style.display = imgSrc ? 'block' : 'none';
+
+            document.getElementById('cardNr').innerText = '#' + p.rugnummer;
+            document.getElementById('cardName').innerText = p.naam;
+
+            document.getElementById('count').innerText = `${index + 1} / ${spelers.length}`;
+            document.getElementById('progressBar').style.width = ((index) / spelers.length * 100) + '%';
+        }
+
+        function swipe(direction) {
+            const card = document.getElementById('card');
+            const p = spelers[index];
+            if (direction === 'right') { card.classList.add('swipe-right'); selected.push(p); history.push({ p, sel: true }); }
+            else { card.classList.add('swipe-left'); history.push({ p, sel: false }); }
+            setTimeout(() => { index++; show(); }, 300);
+        }
+
+        function undo() {
+            if (!history.length) return;
+            const last = history.pop();
+            index--;
+            if (last.sel) selected = selected.filter(x => x.id !== last.p.id);
+            show();
+        }
+
+        function showSummary() {
+            document.getElementById('cardArea').style.display = 'none';
+            document.getElementById('buttons').style.display = 'none';
+            document.getElementById('summary').classList.add('active');
+            document.getElementById('progressBar').style.width = '100%';
+
+            document.getElementById('summaryTitle').innerText = `Geselecteerd: ${selected.length} spelers`;
+            const list = document.getElementById('summaryList');
+            list.innerHTML = '';
+            selected.sort((a, b) => a.rugnummer - b.rugnummer);
+            selected.forEach(p => {
+                let imgSrc = p.foto_profiel || '';
+                if (imgSrc && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+                const div = document.createElement('div');
+                div.className = 'summary-player';
+                div.innerHTML = `
+                    ${imgSrc ? `<img src="${imgSrc}" alt="">` : ''}
+                    <span class="nr">${p.rugnummer}</span>
+                    <span class="naam">${p.naam}</span>
+                    <button class="remove-btn" onclick="removePlayer('${p.id}')">X</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function removePlayer(id) {
+            selected = selected.filter(p => p.id !== id);
+            showSummary();
+        }
+
+        function reset() {
+            index = 0; selected = []; history = [];
+            document.getElementById('cardArea').style.display = 'flex';
+            document.getElementById('buttons').style.display = 'flex';
+            document.getElementById('summary').classList.remove('active');
+            show();
+        }
+
+        function confirmSelection() {
+            fetch(`/match-players/${wedstrijdId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selected_ids: selected.map(p => p.id) })
+            }).then(r => r.json()).then(data => {
+                if (data.ok) window.location.href = data.next;
+                else alert('Fout: ' + (data.error || 'onbekend'));
+            }).catch(() => alert('Verbindingsfout'));
+        }
+
+        // Touch/swipe
+        const area = document.getElementById('cardArea');
+        area.addEventListener('touchstart', (e) => {
+            if (index >= spelers.length) return;
+            touchStartX = e.touches[0].clientX; touchDeltaX = 0; dragging = true;
+        }, { passive: true });
+        area.addEventListener('touchmove', (e) => {
+            if (!dragging) return;
+            touchDeltaX = e.touches[0].clientX - touchStartX;
+            const card = document.getElementById('card');
+            card.style.transform = `translateX(${touchDeltaX}px) rotate(${touchDeltaX * 0.1}deg)`;
+            const t = 50;
+            document.getElementById('labelLike').style.opacity = touchDeltaX > t ? Math.min((touchDeltaX - t) / 80, 1) : 0;
+            document.getElementById('labelNope').style.opacity = touchDeltaX < -t ? Math.min((-touchDeltaX - t) / 80, 1) : 0;
+        }, { passive: true });
+        area.addEventListener('touchend', () => {
+            if (!dragging) return;
+            dragging = false;
+            if (touchDeltaX > 100) swipe('right');
+            else if (touchDeltaX < -100) swipe('left');
+            else {
+                const card = document.getElementById('card');
+                card.style.transform = '';
+                document.getElementById('labelLike').style.opacity = 0;
+                document.getElementById('labelNope').style.opacity = 0;
+            }
+        });
+
+        show();
+    </script>
+</body>
+</html>

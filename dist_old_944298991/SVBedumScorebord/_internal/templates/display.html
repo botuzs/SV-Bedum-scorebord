@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Scorebord</title>
+    <style>
+        /* --- CSS --- */
+        :root {
+            /* Basis */
+            --bg-color: #4a148c;
+            --banner-color: #ffffff;
+            --timer-color: #000000;
+            --score-color: #ffffff;
+            
+            /* Groottes */
+            --timer-size: 4vw;
+            --score-size: 10vw;
+            --logo-size: 25vh;
+            
+            /* Sponsor (Nu onder de timer) */
+            --top-sponsor-height: 15vh;
+            --top-sponsor-size: 80%;
+            
+            --top-banner-width: 40%;
+            
+            /* CSS Variabele voor de hoogte van de timer balk */
+            --top-bar-height: 10vh; 
+            
+            /* Spacing */
+            --score-padding: 2vw;
+            --vertical-spacing: 1vh;
+            --border-radius: 3vh;
+
+            /* Speler Overlay */
+            --player-overlay-bg: #000000;
+            --player-overlay-opacity: 0.95;
+            --player-card-width: 90%;
+            --player-img-height: 80vh;
+            --player-nr-size: 12vw;
+            --player-nr-color: #ffcc00;
+            --player-name-size: 5vw;
+            --player-name-color: #ffffff;
+        }
+
+        body {
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-color);
+            transition: background-color 0.3s ease;
+        }
+
+        /* --- Timer Balk --- */
+        .bar-container { width: 100%; display: flex; justify-content: center; position: relative; z-index: 2; margin-top: 2vh; }
+        
+        .top-bar {
+            background-color: var(--banner-color);
+            width: var(--top-banner-width);
+            min-width: 300px;
+            /* HIER GEBRUIKEN WE DE VARIABELE: */
+            height: var(--top-bar-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            border-bottom-left-radius: var(--border-radius);
+            border-bottom-right-radius: var(--border-radius);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+            transition: height 0.3s ease, width 0.3s ease, background-color 0.3s ease;
+        }
+        .timer { font-size: var(--timer-size); color: var(--timer-color); font-weight: bold; text-align: center; padding: 0 2vw; transition: font-size 0.3s ease, color 0.3s ease; }
+
+        /* --- Sponsor Container --- */
+        .sponsor-container {
+            width: 100%;
+            height: var(--top-sponsor-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+            margin-top: 1vh; 
+            transition: height 0.3s ease;
+        }
+        
+        .sponsor-img-top {
+            height: var(--top-sponsor-size);
+            width: auto;
+            object-fit: contain;
+            transition: height 0.3s ease;
+            display: none; 
+            animation: fadeImg 1s ease-in-out;
+        }
+        
+        .sponsor-img-top.active { display: block; }
+        
+        @keyframes fadeImg { from { opacity: 0; } to { opacity: 1; } }
+
+        /* --- Score Bord --- */
+        .main-display { background-color: transparent; flex-grow: 1; padding: 1vw; box-sizing: border-box; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
+        
+        #live { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--vertical-spacing); }
+        
+        .score-row { display: flex; justify-content: center; align-items: center; width: 100%; margin-top: 2vh; }
+        .team-logo-container { width: 40%; text-align: center; display: flex; align-items: center; justify-content: center; }
+        .team-logo { max-width: 90%; height: var(--logo-size); object-fit: contain; transition: height 0.3s ease; filter: drop-shadow(0 0 10px rgba(0,0,0,0.3)); }
+        .score { width: 20%; text-align: center; font-size: var(--score-size); font-weight: bold; color: var(--score-color); white-space: nowrap; padding: 0 var(--score-padding); transition: font-size 0.3s ease, color 0.3s ease, padding 0.3s ease; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .teamnaam-row { width: 100%; text-align: center; color: var(--score-color); font-size: 2vw; font-weight: bold; opacity: 0.8; margin-top: 1vh; }
+        .placeholder { text-align: center; font-size: 4vw; color: rgba(255,255,255,0.5); width: 100%; }
+
+        /* --- Tekstoverlay Modi --- */
+        :root {
+            --marquee-bg: #ffffff;
+            --marquee-color: #000000;
+            --marquee-size: 3.5vw;
+            --marquee-height: 7vh;
+
+            --overlay-bg: rgba(0,0,0,0.92);
+            --overlay-color: #ffffff;
+            --overlay-size: 6vw;
+        }
+
+        /* Mode 1: Witte balk (scrollend) — duwt de layout naar beneden */
+        #marquee-bar {
+            display: none;
+            width: 100%;
+            height: var(--marquee-height);
+            background-color: var(--marquee-bg);
+            color: var(--marquee-color);
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            z-index: 3;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        #marquee-bar.active { display: flex; align-items: center; }
+        #marquee-bar .marquee-track {
+            display: inline-block;
+            padding-left: 100%;
+            font-size: var(--marquee-size);
+            font-weight: bold;
+            animation: marquee-scroll 15s linear infinite;
+            will-change: transform;
+        }
+        @keyframes marquee-scroll {
+            0%   { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Mode 2: Fullscreen overlay */
+        #text-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-color: var(--overlay-bg);
+            color: var(--overlay-color);
+            z-index: 10000;
+            align-items: center; justify-content: center;
+            padding: 5vw; box-sizing: border-box;
+            text-align: center;
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        #text-overlay.active { display: flex; }
+        #text-overlay .inner {
+            font-size: var(--overlay-size);
+            font-weight: bold;
+            line-height: 1.2;
+            max-width: 90vw;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+        }
+
+        /* Overlay CSS */
+        #lineup-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--player-overlay-bg); opacity: 0; z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; transition: opacity 0.5s; }
+        .player-card { display: flex; flex-direction: row; align-items: center; justify-content: center; width: var(--player-card-width); max-width: 1600px; animation: fadeIn 0.8s ease-in-out; }
+        .player-img-container { flex: 1; text-align: right; padding-right: 3vw; }
+        .player-img { height: auto; max-height: var(--player-img-height); max-width: 100%; border-radius: 15px; box-shadow: 0 0 40px rgba(255,255,255,0.1); object-fit: contain; transition: max-height 0.3s ease; }
+        .player-info { flex: 1; text-align: left; padding-left: 3vw; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; text-shadow: 2px 2px 10px #000; }
+        .player-number { font-size: var(--player-nr-size); color: var(--player-nr-color); line-height: 1; font-weight: bold; margin-bottom: 1vh; transition: font-size 0.3s ease, color 0.3s ease; }
+        .player-name { font-size: var(--player-name-size); color: var(--player-name-color); line-height: 1.1; font-weight: 800; text-transform: uppercase; transition: font-size 0.3s ease, color 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="lineup-overlay">
+        <h1 id="lineup-title" style="position:absolute; top: 5vh; font-size: 3vw; color: #ccc;">OPSTELLING</h1>
+        <div id="player-content" class="player-card">
+            <div class="player-img-container"><img id="lineup-img" src="" class="player-img" style="display:none;"></div>
+            <div class="player-info"><div id="lineup-nr" class="player-number"></div><div id="lineup-name" class="player-name"></div></div>
+        </div>
+    </div>
+
+    <!-- Mode 2: volledig tekst-overlay -->
+    <div id="text-overlay">
+        <div class="inner" id="text-overlay-inner"></div>
+    </div>
+
+    <div class="bar-container">
+        <div class="top-bar"><div class="timer" id="timerVeld">00:00</div></div>
+    </div>
+
+    <div class="sponsor-container" id="sponsorContainer">
+    </div>
+
+    <div class="main-display" id="mainDisplay">
+        <div id="wachten" class="placeholder">
+            Scorebord SV Bedum<br>Wachten op actieve wedstrijd...
+        </div>
+        
+        <div id="live" class="container"> 
+            <div class="score-row">
+                <div class="team-logo-container"><img id="thuisLogo" class="team-logo" src=""></div>
+                <div class="score" id="scoreVeld">0 - 0</div>
+                <div class="team-logo-container"><img id="uitLogo" class="team-logo" src=""></div>
+            </div>
+            
+            <div class="teamnaam-row" id="teamNamenRow" style="display: none;">
+                <span id="thuisNaam">THUIS</span> - <span id="uitNaam">UIT</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mode 1: witte scrollende balk (Staat nu onderaan, duwt main-display omhoog bij flex-grow) -->
+    <div id="marquee-bar">
+        <div class="marquee-track" id="marquee-track"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const initialTheme = {{ theme_json|tojson }};
+        let currentOverlayOpacity = 0.95;
+
+        // --- SPONSOR ROTATIE SCRIPT ---
+        let sponsorInterval = null;
+
+        function renderSponsors(sponsorLijst) {
+            const container = document.getElementById('sponsorContainer');
+            container.innerHTML = ''; 
+
+            if (!sponsorLijst || sponsorLijst.length === 0) return;
+
+            sponsorLijst.forEach((sponsor, index) => {
+                const img = document.createElement('img');
+                img.className = 'sponsor-img-top';
+                img.src = '/static/sponsors/' + sponsor;
+                if (index === 0) img.classList.add('active'); 
+                container.appendChild(img);
+            });
+
+            if (sponsorInterval) clearInterval(sponsorInterval);
+
+            const sponsors = document.querySelectorAll('.sponsor-img-top');
+            if (sponsors.length > 1) {
+                let index = 0;
+                sponsorInterval = setInterval(() => {
+                    sponsors[index].classList.remove('active');
+                    index = (index + 1) % sponsors.length;
+                    sponsors[index].classList.add('active');
+                }, 5000); 
+            }
+        }
+
+        let initialSponsors = {{ sponsor_lijst|tojson }};
+        renderSponsors(initialSponsors);
+
+        socket.on('update_sponsoren_lijst', function(data) {
+            console.log("Nieuwe sponsorlijst ontvangen:", data.sponsoren);
+            renderSponsors(data.sponsoren);
+        });
+
+        // --- THEMA FUNCTIE ---
+        function applyTheme(t) {
+            const root = document.documentElement;
+            
+            // Kleuren
+            if(t.background_color) root.style.setProperty('--bg-color', t.background_color);
+            if(t.banner_color) root.style.setProperty('--banner-color', t.banner_color);
+            if(t.timer_color) root.style.setProperty('--timer-color', t.timer_color);
+            if(t.score_color) root.style.setProperty('--score-color', t.score_color);
+            
+            // Groottes
+            if(t.timer_size) root.style.setProperty('--timer-size', t.timer_size + 'vw');
+            if(t.score_size) root.style.setProperty('--score-size', t.score_size + 'vw');
+            if(t.logo_size) root.style.setProperty('--logo-size', t.logo_size + 'vh');
+            if(t.top_banner_width) root.style.setProperty('--top-banner-width', t.top_banner_width + '%');
+            
+            // NIEUW: Update de hoogte van de timerbalk via variabele
+            if(t.top_bar_height) root.style.setProperty('--top-bar-height', t.top_bar_height + 'vh');
+            
+            // Sponsor vars
+            if(t.top_sponsor_height) root.style.setProperty('--top-sponsor-height', t.top_sponsor_height + 'vh');
+            if(t.top_sponsor_size) root.style.setProperty('--top-sponsor-size', t.top_sponsor_size + '%');
+            
+            // Layout Spacing
+            root.style.setProperty('--score-padding', (t.score_padding || 2) + 'vw');
+            root.style.setProperty('--vertical-spacing', (t.vertical_spacing || 1) + 'vh');
+            root.style.setProperty('--border-radius', (t.border_radius || 3) + 'vh');
+            
+            // Speler Settings
+            if(t.player_overlay_bg) root.style.setProperty('--player-overlay-bg', t.player_overlay_bg);
+            if(t.player_card_width) root.style.setProperty('--player-card-width', t.player_card_width + '%');
+            if(t.player_img_height) root.style.setProperty('--player-img-height', t.player_img_height + 'vh');
+            if(t.player_nr_size) root.style.setProperty('--player-nr-size', t.player_nr_size + 'vw');
+            if(t.player_nr_color) root.style.setProperty('--player-nr-color', t.player_nr_color);
+            if(t.player_name_size) root.style.setProperty('--player-name-size', t.player_name_size + 'vw');
+            if(t.player_name_color) root.style.setProperty('--player-name-color', t.player_name_color);
+            
+            currentOverlayOpacity = (t.player_overlay_opacity !== undefined) ? t.player_overlay_opacity : 0.95;
+            const overlay = document.getElementById('lineup-overlay');
+            if(overlay.style.display === 'flex') overlay.style.opacity = currentOverlayOpacity;
+
+            // Tekstoverlay-thema
+            if(t.tekst_marquee_bg) root.style.setProperty('--marquee-bg', t.tekst_marquee_bg);
+            if(t.tekst_marquee_color) root.style.setProperty('--marquee-color', t.tekst_marquee_color);
+            if(t.tekst_marquee_size) root.style.setProperty('--marquee-size', t.tekst_marquee_size + 'vw');
+            if(t.tekst_overlay_bg) root.style.setProperty('--overlay-bg', t.tekst_overlay_bg);
+            if(t.tekst_overlay_color) root.style.setProperty('--overlay-color', t.tekst_overlay_color);
+            if(t.tekst_overlay_size) root.style.setProperty('--overlay-size', t.tekst_overlay_size + 'vw');
+        }
+
+        // Initialiseer thema
+        applyTheme(initialTheme);
+        
+        // Luister naar live updates
+        socket.on('theme_update', (data) => {
+            console.log("Live thema update:", data);
+            applyTheme(data);
+        });
+
+        // --- APPLICATIE LOGICA ---
+        const wachtenDiv = document.getElementById('wachten');
+        const liveDiv = document.getElementById('live');
+        const timerVeld = document.getElementById('timerVeld');
+        const thuisLogo = document.getElementById('thuisLogo');
+        const uitLogo = document.getElementById('uitLogo');
+        const scoreVeld = document.getElementById('scoreVeld');
+        const thuisNaamVeld = document.getElementById('thuisNaam');
+        const uitNaamVeld = document.getElementById('uitNaam');
+        let actieveWedstrijdId = null;
+        let laatsteStatus = "";
+        let timerInterval = null;
+        let timerSeconden = 0;
+        let duurPerHelft = 45; // Wordt bijgewerkt vanuit wedstrijd data
+        function formatTijd(sec) { const m = Math.floor(sec / 60); const s = sec % 60; return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; }
+        function startTimer(start) { clearInterval(timerInterval); timerSeconden = start; timerVeld.innerText = formatTijd(timerSeconden); timerInterval = setInterval(() => { timerSeconden++; timerVeld.innerText = formatTijd(timerSeconden); }, 1000); }
+        function stopTimer() { clearInterval(timerInterval); }
+
+        function updateDisplay(data) {
+            // Sla duur per helft op als die meekomt
+            if (data.duur_per_helft) duurPerHelft = data.duur_per_helft;
+            if (!actieveWedstrijdId || actieveWedstrijdId === data.id) { wachtenDiv.style.display = 'none'; liveDiv.style.display = 'flex'; actieveWedstrijdId = data.id; }
+            if (data.id === actieveWedstrijdId) {
+                if (data.uit_logo_lokaal) { uitLogo.src = `/static/${data.uit_logo_lokaal}?v=${new Date().getTime()}`; uitLogo.style.display = 'block'; } else { uitLogo.style.display = 'none'; }
+                let homeSrc = ""; if (data.thuis_logo_lokaal) homeSrc = `/static/${data.thuis_logo_lokaal}`; else if ("{{ standaard_thuis_logo }}" !== "None") homeSrc = `/static/{{ standaard_thuis_logo }}`; else homeSrc = "https://logoapi.voetbal.nl/logo.php?clubcode=PJSY23I";
+                if (homeSrc) { if (homeSrc.includes('/static/')) homeSrc += `?v=${new Date().getTime()}`; thuisLogo.src = homeSrc; thuisLogo.style.display = 'block'; }
+                thuisNaamVeld.innerText = data.thuis; uitNaamVeld.innerText = data.uit;
+            }
+        }
+        socket.on('forceer_nieuwe_wedstrijd', (data) => { actieveWedstrijdId = data.id; laatsteStatus = ""; wachtenDiv.style.display = 'none'; liveDiv.style.display = 'flex'; stopTimer(); });
+        socket.on('score_is_geupdate', (data) => { updateDisplay(data); if (data.id === actieveWedstrijdId) scoreVeld.innerText = `${data.scoreThuis} - ${data.scoreUit}`; });
+        socket.on('status_is_geupdate', (data) => {
+            updateDisplay(data);
+            if (data.id === actieveWedstrijdId) {
+                const s = data.status.toLowerCase();
+                if (laatsteStatus === s) return;
+                laatsteStatus = s;
+                if (s.includes('1e helft')) startTimer(0); else if (s.includes('2e helft')) startTimer(duurPerHelft * 60); else if (s.includes('rust') || s.includes('einde')) stopTimer(); else if (!s.includes('helft')) { stopTimer(); timerVeld.innerText = data.tijd.split(' ')[1] || '00:00'; }
+                if (s.includes('einde wedstrijd')) { setTimeout(() => { wachtenDiv.style.display = 'flex'; liveDiv.style.display = 'none'; actieveWedstrijdId = null; stopTimer(); timerVeld.innerText = "00:00"; laatsteStatus = ""; }, 300000); }
+            }
+        });
+        socket.on('wedstrijd_gestopt', () => { wachtenDiv.style.display = 'flex'; liveDiv.style.display = 'none'; actieveWedstrijdId = null; stopTimer(); timerVeld.innerText = "00:00"; laatsteStatus = ""; });
+        
+        let goalTimer = null;
+        socket.on('toon_doelpunt_visual', function(data) {
+             const overlay = document.getElementById('lineup-overlay');
+             const title = document.getElementById('lineup-title'); const imgInfo = document.getElementById('lineup-img'); const nrInfo = document.getElementById('lineup-nr'); const nameInfo = document.getElementById('lineup-name');
+             title.innerText = "DOELPUNT!"; title.style.color = '#ffcc00'; title.style.fontSize = '5vw'; title.style.display = 'block';
+             let imgSrc = data.foto; if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+             if(imgSrc) { imgInfo.src = imgSrc; imgInfo.style.display = 'block'; } else { imgInfo.style.display = 'none'; }
+             nrInfo.innerText = data.rugnummer; nameInfo.innerText = data.naam;
+             overlay.style.display = 'flex'; overlay.style.opacity = currentOverlayOpacity;
+             if (goalTimer) clearTimeout(goalTimer);
+             const duurMs = ((data.duur || 10) * 1000);
+             goalTimer = setTimeout(() => { overlay.style.opacity = '0'; setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = currentOverlayOpacity; }, 500); }, duurMs);
+        });
+
+        // --- Tekstoverlay (marquee / fullscreen) ---
+        let textTimer = null;
+
+        function stopText() {
+            if (textTimer) { clearTimeout(textTimer); textTimer = null; }
+            document.getElementById('marquee-bar').classList.remove('active');
+            document.getElementById('text-overlay').classList.remove('active');
+        }
+
+        socket.on('tekst_tonen', function(data) {
+            stopText();
+            const text = data.text || '';
+            const mode = data.mode || 'marquee';
+            const duration = Math.max(1, parseInt(data.duration || 10, 10));
+
+            if (mode === 'overlay') {
+                const el = document.getElementById('text-overlay');
+                document.getElementById('text-overlay-inner').innerText = text;
+                el.classList.add('active');
+            } else {
+                const track = document.getElementById('marquee-track');
+                track.innerText = text;
+                // Animatiesnelheid afstemmen op lengte (≈ 20 chars per sec)
+                const seconds = Math.max(8, Math.round(text.length / 4));
+                track.style.animation = 'none';
+                // force reflow
+                void track.offsetWidth;
+                track.style.animation = `marquee-scroll ${seconds}s linear infinite`;
+                document.getElementById('marquee-bar').classList.add('active');
+            }
+
+            textTimer = setTimeout(stopText, duration * 1000);
+        });
+
+        socket.on('tekst_verbergen', function() {
+            stopText();
+        });
+
+        
+
+        socket.on('lineup_status', function(data) {
+            const overlay = document.getElementById('lineup-overlay');
+            if (data.active) { overlay.style.display = 'flex'; 
+                if (data.state === 'intro') { document.getElementById('lineup-title').style.display = 'block'; document.getElementById('lineup-img').style.display = 'none'; document.getElementById('lineup-nr').innerText = ''; document.getElementById('lineup-name').innerText = ''; } 
+                else if (data.state === 'finished') { document.getElementById('lineup-title').innerText = "VEEL PLEZIER!"; }
+            } else { overlay.style.display = 'none'; }
+        });
+        socket.on('lineup_update', function(speler) {
+            if (goalTimer) clearTimeout(goalTimer);
+            const title = document.getElementById('lineup-title'); title.innerText = "OPSTELLING"; title.style.color = '#ccc'; title.style.fontSize = '3vw'; title.style.display = 'block';
+            const imgInfo = document.getElementById('lineup-img'); const nrInfo = document.getElementById('lineup-nr'); const nameInfo = document.getElementById('lineup-name');
+            const container = document.getElementById('player-content'); container.style.animation = 'none'; container.offsetHeight; container.style.animation = 'fadeIn 0.5s ease-in-out';
+            let imgSrc = speler.foto_profiel || speler.foto_actie; if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('/')) imgSrc = '/' + imgSrc;
+            if(imgSrc) { imgInfo.src = imgSrc; imgInfo.style.display = 'block'; } else { imgInfo.style.display = 'none'; }
+            nrInfo.innerText = speler.rugnummer; nameInfo.innerText = speler.naam;
+            document.getElementById('lineup-overlay').style.display = 'flex'; document.getElementById('lineup-overlay').style.opacity = currentOverlayOpacity;
+        });
+    </script>
+</body>
+</html>

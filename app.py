@@ -119,7 +119,27 @@ DEFAULT_SETTINGS = {
     "player_nr_size": 12,
     "player_nr_color": "#ffcc00",
     "player_name_size": 5,
-    "player_name_color": "#ffffff"
+    "player_name_color": "#ffffff",
+
+    # Juichfoto (doelpunt-visual) duur in seconden
+    "juichfoto_duur": 10,
+
+    # Tekstoverlay
+    "tekst_marquee_bg": "#FFFFFF",
+    "tekst_marquee_color": "#000000",
+    "tekst_marquee_size": 3.5,
+    "tekst_marquee_height": 7,
+    "tekst_marquee_font": "Arial",
+    "tekst_overlay_bg": "#000000",
+    "tekst_overlay_color": "#FFFFFF",
+    "tekst_overlay_size": 6.0,
+    
+    # Templates voor teksten
+    "tekst_templates": [
+        {"id": "1", "label": "Welkom", "text": "Welkom bij SV Bedum! Veel plezier bij de wedstrijd."},
+        {"id": "2", "label": "Rust", "text": "Het is rust. Tijd voor een kopje koffie in de kantine!"},
+        {"id": "3", "label": "Bedankt", "text": "Bedankt voor jullie komst en tot de volgende keer!"}
+    ]
 }
 
 # --- Instellingen Functies (ongewijzigd) ---
@@ -390,8 +410,18 @@ def kiosk_dashboard():
     if not session.get('kiosk_logged_in') and not session.get('admin_logged_in'):
         return redirect(url_for('login_page'))
 
-    wedstrijden_lijst = sorted(WEDSTRIJDEN_DB.values(), key=lambda x: x['tijd'])
-    return render_template('index.html', wedstrijden=wedstrijden_lijst)
+    # Nieuwe simpele flow: geen geplande wedstrijdenlijst meer.
+    # Toon alleen de lopende wedstrijd (als die er is) en een startformulier.
+    huidige_wedstrijd = None
+    qr_data = None
+    if HUIDIGE_ACTIEVE_WEDSTRIJD_ID:
+        huidige_wedstrijd = WEDSTRIJDEN_DB.get(HUIDIGE_ACTIEVE_WEDSTRIJD_ID)
+        # Als er een verse QR in de sessie staat (net na 'start'), haal op en wis direct
+        qr_data = session.pop('laatste_qr', None)
+
+    return render_template('index.html',
+                           huidige_wedstrijd=huidige_wedstrijd,
+                           qr_data=qr_data)
 
 # --- In app.py ---
 
@@ -507,7 +537,67 @@ def match_setup_save(wedstrijd_id):
     # Stuur display update met nieuw logo
     socketio.emit('score_is_geupdate', enrich_match_data(wedstrijd))
 
+    # Eerste elftal krijgt eerst spelerselectie (swipe), daarna lineup-intro, dan control.
+    if wedstrijd.get('eerste_elftal'):
+        return redirect(url_for('match_players_page', wedstrijd_id=wedstrijd_id))
+
     return redirect(url_for('control_panel', wedstrijd_id=wedstrijd_id))
+
+
+# --- EERSTE ELFTAL: Spelerselectie (swipe) + Opstelling intro ---
+
+def _match_auth_ok(wedstrijd_id):
+    """Hergebruikte authcheck voor leider-pagina's."""
+    if HUIDIGE_ACTIEVE_WEDSTRIJD_ID != wedstrijd_id:
+        return False
+    if not session.get(f"auth_{wedstrijd_id}"):
+        return False
+    return True
+
+
+@app.route('/match-players/<string:wedstrijd_id>')
+def match_players_page(wedstrijd_id):
+    if not _match_auth_ok(wedstrijd_id):
+        return render_template('error.html', message="Geen toegang of wedstrijd niet actief.")
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd:
+        return abort(404)
+    load_players()
+    return render_template('match-players.html', wedstrijd=wedstrijd, spelers=SPELERS_DB)
+
+
+@app.route('/match-players/<string:wedstrijd_id>', methods=['POST'])
+def match_players_save(wedstrijd_id):
+    if not _match_auth_ok(wedstrijd_id):
+        return {'ok': False, 'error': 'Geen toegang'}, 403
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd:
+        return {'ok': False, 'error': 'Onbekende wedstrijd'}, 404
+
+    data = request.get_json(silent=True) or {}
+    selected = data.get('selected_ids', [])
+    wedstrijd['selected_player_ids'] = [str(x) for x in selected]
+
+    try:
+        with open(WEDSTRIJDEN_FILE, 'w', encoding='utf-8') as f:
+            json.dump(list(WEDSTRIJDEN_DB.values()), f, indent=4)
+    except Exception as e:
+        logging.error(f"Fout bij opslaan spelerselectie: {e}")
+
+    return {'ok': True, 'next': url_for('match_lineup_page', wedstrijd_id=wedstrijd_id)}
+
+
+@app.route('/match-lineup/<string:wedstrijd_id>')
+def match_lineup_page(wedstrijd_id):
+    if not _match_auth_ok(wedstrijd_id):
+        return render_template('error.html', message="Geen toegang of wedstrijd niet actief.")
+    wedstrijd = WEDSTRIJDEN_DB.get(wedstrijd_id)
+    if not wedstrijd:
+        return abort(404)
+    load_players()
+    geselecteerd = [p for p in SPELERS_DB if p['id'] in wedstrijd.get('selected_player_ids', [])]
+    geselecteerd.sort(key=lambda x: int(x.get('rugnummer', 0)))
+    return render_template('match-lineup.html', wedstrijd=wedstrijd, spelers=geselecteerd)
 
 # --- API Endpoints ---
 
@@ -530,12 +620,22 @@ def api_clublogos():
         logos = sorted([f for f in os.listdir(LOGO_FOLDER) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))])
     return {'logos': logos}
 
-# --- KIOSK: Snel wedstrijd aanmaken ---
+# --- KIOSK: Direct wedstrijd starten (dashboard-flow) ---
 
 @app.route('/kiosk/create-match', methods=['POST'])
 def kiosk_create_match():
+    """
+    Nieuwe flow: bestuurslid maakt wedstrijd aan en die wordt DIRECT de actieve wedstrijd.
+    Er wordt meteen een QR gegenereerd voor de leider.
+    """
     if not session.get('kiosk_logged_in') and not session.get('admin_logged_in'):
         return redirect(url_for('login_page'))
+
+    global HUIDIGE_ACTIEVE_WEDSTRIJD_ID
+
+    # Als er al een actieve wedstrijd is, niet per ongeluk overschrijven
+    if HUIDIGE_ACTIEVE_WEDSTRIJD_ID:
+        return redirect(url_for('kiosk_dashboard'))
 
     match_id = str(uuid.uuid4())
     thuis = request.form.get('thuis', 'SV Bedum').strip() or 'SV Bedum'
@@ -554,7 +654,8 @@ def kiosk_create_match():
         "thuis_logo_lokaal": "clublogos/default_home_logo-sv-bedum.png",
         "uit_logo_lokaal": None,
         "eerste_elftal": is_eerste,
-        "duur_per_helft": 45
+        "duur_per_helft": 45,
+        "selected_player_ids": []  # Voor eerste elftal: geselecteerde spelers (swipe)
     }
 
     WEDSTRIJDEN_DB[match_id] = match_data
@@ -564,6 +665,49 @@ def kiosk_create_match():
     except Exception as e:
         logging.error(f"Fout bij aanmaken wedstrijd: {e}")
 
+    # Wedstrijd direct activeren
+    HUIDIGE_ACTIEVE_WEDSTRIJD_ID = match_id
+    actieve_logos = get_actieve_sponsoren()
+    socketio.emit('update_sponsoren_lijst', {'sponsoren': actieve_logos})
+
+    # Token + QR genereren
+    token = secrets.token_urlsafe(16)
+    WEDSTRIJD_TOKENS[match_id] = token
+
+    instellingen = load_settings()
+    theme = {**DEFAULT_SETTINGS, **instellingen.get('theme', {})}
+    base = theme.get('tailscale_url', '127.0.0.1').replace('http://', '').replace('https://', '')
+    base_url = f"http://{base}:5000"
+    if 'ts.net' in base:
+        base_url = f"http://{base}"
+
+    volledige_url = f"{base_url}/control/{match_id}?token={token}"
+    qr_base64 = genereer_qr_code(volledige_url)
+
+    # Bewaar in sessie zodat dashboard de QR kan tonen na redirect
+    session['laatste_qr'] = {
+        'qr_code': qr_base64,
+        'url': volledige_url,
+        'match_id': match_id
+    }
+
+    return redirect(url_for('kiosk_dashboard'))
+
+
+@app.route('/kiosk/release-match', methods=['POST'])
+def kiosk_release_match():
+    """
+    'Geef lopende wedstrijd vrij' — noodknop voor bestuurslid als leider zijn sessie kwijt is.
+    Reset het bord zodat er een nieuwe wedstrijd gestart kan worden.
+    """
+    if not session.get('kiosk_logged_in') and not session.get('admin_logged_in'):
+        return redirect(url_for('login_page'))
+
+    global HUIDIGE_ACTIEVE_WEDSTRIJD_ID
+    logging.info(f"Bestuurslid heeft wedstrijd {HUIDIGE_ACTIEVE_WEDSTRIJD_ID} vrijgegeven.")
+    HUIDIGE_ACTIEVE_WEDSTRIJD_ID = None
+    WEDSTRIJD_TOKENS.clear()
+    socketio.emit('wedstrijd_gestopt')
     return redirect(url_for('kiosk_dashboard'))
 
 @app.route('/control_panel/<string:wedstrijd_id>')
@@ -1023,6 +1167,12 @@ def dynamic_theme_css():
 @app.route('/login')
 def login_page():
     return render_template('login.html', error=request.args.get('error'))
+
+@app.route('/logout')
+def logout_page():
+    session.pop('admin_logged_in', None)
+    session.pop('kiosk_logged_in', None)
+    return redirect(url_for('login_page'))
 # --- In app.py, vervang de admin_login_post functie ---
 
 @app.route('/admin-login', methods=['POST'])
@@ -1143,19 +1293,71 @@ def handle_doelpunt_gevierd(data):
         wedstrijd['scoreThuis'] += 1
         emit('score_is_geupdate', wedstrijd, broadcast=True)
 
-    # Foto logica
+    # Juichfoto-duur uit instellingen (standaard 10s)
+    instellingen = load_settings()
+    theme = {**DEFAULT_SETTINGS, **instellingen.get('theme', {})}
+    duur = int(theme.get('juichfoto_duur', 10))
+
+    # Foto logica — speler_id kan None / leeg zijn ("geen speler")
     speler_id = data.get('player_id')
-    gekozen_speler = next((p for p in SPELERS_DB if p['id'] == speler_id), None)
-    
+    gekozen_speler = next((p for p in SPELERS_DB if p['id'] == speler_id), None) if speler_id else None
+
     if gekozen_speler:
-        # HIER: Pak expliciet 'foto_actie'.
         gebruikte_foto = gekozen_speler.get('foto_actie') or gekozen_speler.get('foto_profiel')
-        
         emit('toon_doelpunt_visual', {
-            'foto': gebruikte_foto,  # Dit wordt verstuurd naar de 'toon_doelpunt_visual' functie hierboven
+            'foto': gebruikte_foto,
             'naam': gekozen_speler.get('naam'),
-            'rugnummer': gekozen_speler.get('rugnummer')
+            'rugnummer': gekozen_speler.get('rugnummer'),
+            'duur': duur
         }, broadcast=True)
+    else:
+        # Geen speler gekoppeld — toon alleen een neutrale juich-visual
+        emit('toon_doelpunt_visual', {
+            'foto': None,
+            'naam': 'DOELPUNT!',
+            'rugnummer': '',
+            'duur': duur
+        }, broadcast=True)
+
+
+@socketio.on('show_text')
+def handle_show_text(data):
+    """
+    Tekst op het scherm tonen.
+    data: { text: str, mode: 'marquee'|'overlay', duration: int (seconden) }
+    Toegestaan voor admin en voor de leider van de actieve wedstrijd.
+    """
+    text = (data.get('text') or '').strip()
+    if not text:
+        return
+
+    is_admin = session.get('admin_logged_in')
+    match_id = data.get('match_id')
+    is_leider = match_id and match_id == HUIDIGE_ACTIEVE_WEDSTRIJD_ID and session.get(f"auth_{match_id}")
+    if not (is_admin or is_leider):
+        return
+
+    mode = data.get('mode', 'marquee')
+    if mode not in ('marquee', 'overlay'):
+        mode = 'marquee'
+
+    try:
+        duration = max(1, int(data.get('duration', 10)))
+    except (TypeError, ValueError):
+        duration = 10
+
+    emit('tekst_tonen', {
+        'text': text,
+        'mode': mode,
+        'duration': duration
+    }, broadcast=True)
+
+
+@socketio.on('hide_text')
+def handle_hide_text():
+    if not (session.get('admin_logged_in') or session.get('kiosk_logged_in')):
+        return
+    emit('tekst_verbergen', broadcast=True)
 
 @socketio.on('update_score')
 def handle_update_score(data):
@@ -1325,8 +1527,8 @@ def handle_toggle_balsponsors(data):
     is_actief = data.get('active', False)
     logging.info(f"Extra sponsoren (eerste elftal) ingesteld op: {is_actief}")
 
-    # Altijd de vaste 2 hoofdsponsoren
-    nieuwe_lijst = list(VASTE_SPONSORS)
+    # Basis: alle sponsors die in de map staan (voorheen VASTE_SPONSORS)
+    nieuwe_lijst = list(SPONSOR_ROTEREND)
 
     # Voeg externe sponsoren toe als het vinkje aan staat
     if is_actief:

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opstelling presenteren</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; min-height: 100vh; }
+        .header {
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            padding: 18px; text-align: center;
+        }
+        .header h1 { font-size: 1.3em; }
+        .header .match-info { color: #a0c4ff; font-size: 1em; margin-top: 4px; }
+
+        .section { margin: 20px; padding: 20px; background: #16213e; border-radius: 10px; }
+        .section h2 { margin-bottom: 12px; color: #e94560; }
+
+        .btn {
+            display: block; width: 100%;
+            padding: 16px; margin-top: 10px;
+            border: none; border-radius: 8px;
+            font-size: 1.1em; cursor: pointer; font-weight: bold;
+        }
+        .btn-primary { background: #28a745; color: white; }
+        .btn-secondary { background: #555; color: white; }
+        .btn-warning { background: #ffc107; color: #333; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .current-player {
+            background: #0f3460; padding: 20px; border-radius: 10px;
+            text-align: center; margin-top: 10px;
+        }
+        .current-player .nr { font-size: 3em; font-weight: bold; color: #e94560; }
+        .current-player .naam { font-size: 1.4em; margin-top: 6px; }
+        .current-player .index { color: #a0c4ff; font-size: 0.9em; margin-top: 8px; }
+
+        .list-compact { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .pill { background: #0f3460; padding: 6px 10px; border-radius: 14px; font-size: 0.85em; }
+        .pill.active { background: #e94560; }
+        .pill.done { background: #28a745; opacity: 0.6; }
+
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .finished-box { text-align: center; padding: 20px; }
+        .finished-box .big { font-size: 2em; color: #28a745; margin-bottom: 10px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="header">
+        <h1>Opstelling op het scherm</h1>
+        <div class="match-info">{{ wedstrijd.thuis }} vs {{ wedstrijd.uit }}</div>
+    </div>
+
+    <!-- STEP 1: Intro -->
+    <div class="section step active" id="stepIntro">
+        <h2>Wil je beginnen met de opstelling?</h2>
+        <p>Er zijn <strong>{{ spelers|length }}</strong> spelers geselecteerd. Als je start, verschijnen de namen één voor één op het scorebord.</p>
+
+        <div class="list-compact">
+            {% for speler in spelers %}
+            <span class="pill" data-id="{{ speler.id }}">#{{ speler.rugnummer }} {{ speler.naam }}</span>
+            {% endfor %}
+        </div>
+
+        <button class="btn btn-primary" onclick="startLineup()">Ja, start opstelling</button>
+        <button class="btn btn-secondary" onclick="skipLineup()">Overslaan — direct naar bediening</button>
+    </div>
+
+    <!-- STEP 2: Lopend -->
+    <div class="section step" id="stepRunning">
+        <h2>Huidige speler op scherm</h2>
+        <div class="current-player">
+            <div class="nr" id="curNr">—</div>
+            <div class="naam" id="curName">Druk op 'Volgende' om te starten</div>
+            <div class="index" id="curIndex"></div>
+        </div>
+
+        <button class="btn btn-primary" onclick="nextPlayer()">Volgende speler &rarr;</button>
+        <button class="btn btn-secondary" onclick="prevPlayer()">&larr; Vorige</button>
+        <button class="btn btn-danger" onclick="stopLineup()">Stop opstelling</button>
+    </div>
+
+    <!-- STEP 3: Klaar -->
+    <div class="section step" id="stepFinished">
+        <div class="finished-box">
+            <div class="big">Opstelling klaar!</div>
+            <p>Alle spelers zijn getoond. Ga door naar de wedstrijdbediening.</p>
+        </div>
+        <button class="btn btn-primary" onclick="goToControl()">Ga naar bediening</button>
+        <button class="btn btn-secondary" onclick="restartLineup()">Opstelling opnieuw tonen</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const wedstrijdId = "{{ wedstrijd.id }}";
+        const spelerIds = {{ spelers|map(attribute='id')|list|tojson }};
+
+        function showStep(id) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function startLineup() {
+            socket.emit('lineup_control', { action: 'start', selected_ids: spelerIds });
+            showStep('stepRunning');
+        }
+
+        function skipLineup() {
+            goToControl();
+        }
+
+        function nextPlayer() {
+            socket.emit('lineup_control', { action: 'next' });
+        }
+        function prevPlayer() {
+            socket.emit('lineup_control', { action: 'prev' });
+        }
+        function stopLineup() {
+            socket.emit('lineup_control', { action: 'stop' });
+            goToControl();
+        }
+        function restartLineup() {
+            socket.emit('lineup_control', { action: 'start', selected_ids: spelerIds });
+            showStep('stepRunning');
+        }
+        function goToControl() {
+            window.location.href = `/control_panel/${wedstrijdId}`;
+        }
+
+        // Listeners
+        socket.on('lineup_update', (p) => {
+            document.getElementById('curNr').innerText = '#' + p.rugnummer;
+            document.getElementById('curName').innerText = p.naam;
+        });
+        socket.on('lineup_status', (data) => {
+            if (data.state === 'finished') {
+                showStep('stepFinished');
+            }
+        });
+    </script>
+</body>
+</html>
