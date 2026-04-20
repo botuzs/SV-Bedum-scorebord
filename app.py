@@ -142,14 +142,22 @@ DEFAULT_SETTINGS = {
     ]
 }
 
-# --- Instellingen Functies (ongewijzigd) ---
+# --- Instellingen Functies ---
 def load_settings():
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e: logging.error(f"Kon settings.json niet laden: {e}")
-    return {}
+    if not os.path.exists(SETTINGS_FILE):
+        logging.error(f"FATALE FOUT: {SETTINGS_FILE} niet gevonden! De applicatie stopt.")
+        sys.exit(1)
+    
+    try:
+        with open(SETTINGS_FILE, 'r') as f:
+            data = json.load(f)
+            if not data:
+                logging.error(f"FATALE FOUT: {SETTINGS_FILE} is leeg!")
+                sys.exit(1)
+            return data
+    except Exception as e:
+        logging.error(f"FATALE FOUT: Kon {SETTINGS_FILE} niet laden: {e}")
+        sys.exit(1)
 
 
 def load_players():
@@ -237,43 +245,52 @@ def sync_met_master():
 
 
 def sync_sponsors_van_master(master_ip, master_port=5000):
-    """Leegt de lokale sponsors map en downloadt alle PNG's van de master."""
+    """Leegt de lokale sponsors map en downloadt alle PNG's van de master met retry logica."""
     if not master_ip:
         logging.info("Sponsor sync overgeslagen: geen master IP.")
         return
+
+    # 1. EERST de map leegmaken (zoals gevraagd)
+    logging.info(f"Lokaal opschonen van sponsors map: {UPLOAD_FOLDER}")
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    for bestand in os.listdir(UPLOAD_FOLDER):
+        pad = os.path.join(UPLOAD_FOLDER, bestand)
+        if os.path.isfile(pad):
+            try:
+                os.remove(pad)
+            except Exception as e:
+                logging.warning(f"Kon {bestand} niet verwijderen: {e}")
+
     base_url = f"http://{master_ip}:{master_port}"
-    try:
-        logging.info(f"Sponsors ophalen van {base_url} ...")
-        resp = requests.get(f"{base_url}/api/sponsors", timeout=10)
-        resp.raise_for_status()
-        sponsors = resp.json().get('sponsors', [])
+    max_retries = 4
+    retry_delay = 10
 
-        # Verwijder alleen bestanden (niet de map zelf, om toegangsproblemen te voorkomen)
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        for bestand in os.listdir(UPLOAD_FOLDER):
-            pad = os.path.join(UPLOAD_FOLDER, bestand)
-            if os.path.isfile(pad):
-                try:
-                    os.remove(pad)
-                except Exception as e:
-                    logging.warning(f"Kon {bestand} niet verwijderen: {e}")
+    for poging in range(1, max_retries + 1):
+        try:
+            logging.info(f"Sponsors ophalen van {base_url} (poging {poging}/{max_retries}) ...")
+            resp = requests.get(f"{base_url}/api/sponsors", timeout=10)
+            resp.raise_for_status()
+            sponsors = resp.json().get('sponsors', [])
 
-        for s in sponsors:
-            img_url = f"{base_url}{s['url']}"
-            img_resp = requests.get(img_url, timeout=10)
-            img_resp.raise_for_status()
-            with open(os.path.join(UPLOAD_FOLDER, s['filename']), 'wb') as f:
-                f.write(img_resp.content)
+            for s in sponsors:
+                img_url = f"{base_url}{s['url']}"
+                img_resp = requests.get(img_url, timeout=10)
+                img_resp.raise_for_status()
+                with open(os.path.join(UPLOAD_FOLDER, s['filename']), 'wb') as f:
+                    f.write(img_resp.content)
 
-        logging.info(f"Sponsors gesynchroniseerd: {len(sponsors)} bestanden.")
-    except requests.exceptions.RequestException as e:
-        logging.warning(f"Sponsor sync mislukt: master niet bereikbaar. Lokale sponsors bewaard. ({e})")
-    except Exception as e:
-        logging.error(f"Fout tijdens sponsor sync: {e}")
+            logging.info(f"Sponsors gesynchroniseerd: {len(sponsors)} bestanden.")
+            return # Succes! Verlaat de functie
 
-# Voeg load_players() ook toe aan de startup, bijv. onder laad_assets()
-# (Roep dit handmatig aan of zet het onderin bij `if __name__ == ...`)
-load_players()
+        except requests.exceptions.RequestException as e:
+            if poging < max_retries:
+                logging.warning(f"Sponsor sync poging {poging} mislukt: {e}. Opnieuw over {retry_delay}s...")
+                time.sleep(retry_delay)
+            else:
+                logging.error(f"Sponsor sync definitief mislukt na {max_retries} pogingen.")
+        except Exception as e:
+            logging.error(f"Onverwachte fout tijdens sponsor sync: {e}")
+            break # Bij niet-netwerkfouten stoppen we direct
 
 def haal_externe_sponsoren_op():
     """Haalt actieve sponsoren op van de sponsor server (PI/ander apparaat)."""
@@ -443,16 +460,27 @@ def generate_secure_qr(wedstrijd_id):
     # 3. Genereer de token voor de QR (zoals voorheen)
     token = secrets.token_urlsafe(16)
     WEDSTRIJD_TOKENS[wedstrijd_id] = token
-    
+
     instellingen = load_settings()
     theme = {**DEFAULT_SETTINGS, **instellingen.get('theme', {})}
-    base = theme.get('tailscale_url', '127.0.0.1').replace('http://', '').replace('https://', '')
-    base_url = f"http://{base}:5000" 
-    if 'ts.net' in base: base_url = f"http://{base}" 
-    
+
+    raw_url = theme.get('tailscale_url', '127.0.0.1').strip()
+
+    if raw_url.startswith(('http://', 'https://')):
+        # Gebruiker heeft zelf protocol opgegeven, respecteer dit volledig
+        base_url = raw_url.rstrip('/')
+    elif 'ts.net' in raw_url:
+        # Tailscale default: http en geen poort nodig
+        base_url = f"http://{raw_url}"
+    elif '.' in raw_url and not any(char.isdigit() for char in raw_url.split('.')[-1]):
+        # Lijkt op een domeinnaam (bijv. scorebord.svbedum.nl): default naar https en geen poort
+        base_url = f"https://{raw_url}"
+    else:
+        # Waarschijnlijk een IP-adres of localhost: voeg protocol en poort 5000 toe
+        base_url = f"http://{raw_url.replace('http://', '').replace('https://', '')}:5000"
+
     volledige_url = f"{base_url}/control/{wedstrijd_id}?token={token}"
     qr_base64 = genereer_qr_code(volledige_url)
-    
     return {'qr_code': qr_base64, 'url': volledige_url}
 
 
@@ -676,10 +704,21 @@ def kiosk_create_match():
 
     instellingen = load_settings()
     theme = {**DEFAULT_SETTINGS, **instellingen.get('theme', {})}
-    base = theme.get('tailscale_url', '127.0.0.1').replace('http://', '').replace('https://', '')
-    base_url = f"http://{base}:5000"
-    if 'ts.net' in base:
-        base_url = f"http://{base}"
+    
+    raw_url = theme.get('tailscale_url', '127.0.0.1').strip()
+    
+    if raw_url.startswith(('http://', 'https://')):
+        # Gebruiker heeft zelf protocol opgegeven, respecteer dit volledig
+        base_url = raw_url.rstrip('/')
+    elif 'ts.net' in raw_url:
+        # Tailscale default: http en geen poort nodig
+        base_url = f"http://{raw_url}"
+    elif '.' in raw_url and not any(char.isdigit() for char in raw_url.split('.')[-1]):
+        # Lijkt op een domeinnaam (bijv. scorebord.svbedum.nl): default naar https en geen poort
+        base_url = f"https://{raw_url}"
+    else:
+        # Waarschijnlijk een IP-adres of localhost: voeg protocol en poort 5000 toe
+        base_url = f"http://{raw_url.replace('http://', '').replace('https://', '')}:5000"
 
     volledige_url = f"{base_url}/control/{match_id}?token={token}"
     qr_base64 = genereer_qr_code(volledige_url)
@@ -1502,22 +1541,30 @@ def handle_admin_restart():
     logging.warning("ADMIN RESTART: Applicatie wordt herstart...")
     
     def delayed_restart():
-        time.sleep(1) 
+        time.sleep(2) # Iets langer wachten zodat poorten vrijkomen
         try:
+            logging.info(f"Herstarten proces: {sys.executable}")
             # Check of we als .exe draaien (PyInstaller)
             if getattr(sys, 'frozen', False):
-                # Als .exe: start gewoon de exe opnieuw zonder argumenten
-                subprocess.Popen([sys.executable])
+                # Als .exe: start de exe opnieuw. 
+                # Op Windows gebruiken we CREATE_NEW_CONSOLE om het proces los te koppelen.
+                if os.name == 'nt':
+                    subprocess.Popen([sys.executable], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                else:
+                    subprocess.Popen([sys.executable])
             else:
                 # Als script: start python + het script
-                subprocess.Popen([sys.executable] + sys.argv)
-                
+                if os.name == 'nt':
+                    subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                else:
+                    subprocess.Popen([sys.executable] + sys.argv)
+
             # Stop het huidige proces hard
+            logging.info("Oude proces wordt afgesloten.")
             os._exit(0)
-            
+
         except Exception as e:
             logging.error(f"FATALE FOUT: Kon niet herstarten. {e}")
-            
     threading.Thread(target=delayed_restart).start()
 
 

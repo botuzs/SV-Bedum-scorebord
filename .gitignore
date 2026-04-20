@@ -1,3 +1,6 @@
+# Mappen met "old" in de naam (oude build artefacten)
+*old*/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

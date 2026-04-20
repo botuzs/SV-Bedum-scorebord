@@ -17,6 +17,7 @@ def get_base_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 BASE_PATH = get_base_path()
+
 def start_server_thread():
     """Start de Flask/SocketIO server in een aparte thread."""
     logging.info("Flask server starten op achtergrond thread...")
@@ -33,7 +34,6 @@ if __name__ == '__main__':
     logging.info("--- Kiosk Modus Starten ---")
     
     # 1. Trigger de synchronisatie en laad de data
-    # Dit roept de nieuwe functie aan die we in app.py hebben gemaakt
     app.initialize_app()
     
     # 2. Start de server in een aparte thread
@@ -44,40 +44,32 @@ if __name__ == '__main__':
     logging.info("Wachten op serverstart (3s)...")
     time.sleep(3) 
 
-    # 3. Rest van je bestaande monitor detectie en venster logica...
+    # 3. Laad instellingen
     instellingen = app.load_settings()
     monitor_width, monitor_height = 1920, 1080 # Defaults
-    # LAAD HET THEMA OM DE ACHTERGRONDKLEUR TE KRIJGEN
+    
     theme = {**app.DEFAULT_SETTINGS, **instellingen.get('theme', {})}
-    startup_bg_color = theme.get('background_color', '#000000') # Pak de opgeslagen kleur
+    startup_bg_color = theme.get('background_color', '#000000')
     
     try:
         monitor = webview.screens[0]
         monitor_width = monitor.width
         monitor_height = monitor.height
-        
-        # SLA MONITORGROOTTE OP voor de admin-pagina
-        if (instellingen.get('monitor_width') != monitor_width or 
-            instellingen.get('monitor_height') != monitor_height):
-            logging.info(f"Nieuwe monitorgrootte gedetecteerd: {monitor_width}x{monitor_height}. Opslaan...")
-            instellingen['monitor_width'] = monitor_width
-            instellingen['monitor_height'] = monitor_height
-            app.save_settings(instellingen)
-        
+        logging.info(f"Monitor gedetecteerd: {monitor_width}x{monitor_height}.")
     except Exception as e:
         logging.warning(f"Kon schermgrootte niet detecteren: {e}")
         monitor_width = instellingen.get('monitor_width', 1920)
         monitor_height = instellingen.get('monitor_height', 1080)
 
-
-    # 5. Bepaal venstergrootte (opgeslagen of default)
+    # 5. Bepaal venstergrootte
     initial_x = instellingen.get('x', 0)
     initial_y = instellingen.get('y', 0)
-    initial_width = instellingen.get('width', monitor_width) # Default volledige breedte
-    initial_height = instellingen.get('height', monitor_height // 6) # Default 1/6e hoogte
+    initial_width = instellingen.get('width', monitor_width)
+    initial_height = instellingen.get('height', monitor_height // 6)
     
     logging.info(f"Venster openen op ({initial_x},{initial_y}) met grootte ({initial_width}x{initial_height})")
-# 6. Maak het Kiosk-venster aan
+
+    # 6. Maak het Kiosk-venster aan
     try:
         main_window = webview.create_window(
             'SV Bedum Scorebord',
@@ -90,12 +82,32 @@ if __name__ == '__main__':
             fullscreen=False,
             frameless=True,
             on_top=True,
-            transparent=False,             # <-- CRUCIAAL (1/2)
-            background_color=startup_bg_color  # <-- CRUCIAAL (2/2)
+            transparent=False,
+            background_color=startup_bg_color
         )
+        
         # 7. REGISTREER het venster bij de server
         app.register_main_window(main_window)
-        
+
+        def force_window_refresh():
+            """Wacht 5 seconden en pas dan de grootte/positie nogmaals hard toe vanuit de JSON."""
+            time.sleep(5)
+            try:
+                # Laad de instellingen opnieuw voor de zekerheid
+                settings = app.load_settings()
+                fx = settings.get('x', initial_x)
+                fy = settings.get('y', initial_y)
+                fw = settings.get('width', initial_width)
+                fh = settings.get('height', initial_height)
+                logging.info(f"FORCEREN: Venster herstellen naar {fw}x{fh} op ({fx},{fy})")
+                main_window.move(fx, fy)
+                main_window.resize(fw, fh)
+            except Exception as e:
+                logging.error(f"Kon venster niet forceren: {e}")
+
+        # Start de fix thread
+        threading.Thread(target=force_window_refresh, daemon=True).start()
+
         # 8. Start de GUI
         webview.start(debug=False, private_mode=True)
         
